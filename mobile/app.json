@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Resolution Fitness",
+    "slug": "resolution-fitness",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.resolution.fitness"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.resolution.fitness"
+    },
+    "plugins": [
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "extra": {}
+  }
+}
