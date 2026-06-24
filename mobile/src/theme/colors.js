@@ -35,7 +35,7 @@ const Colors = {
   textPrimary: '#000000',
   textSecondary: '#737373',
   textMuted: '#A3A3A3',
-  textWhite: '#FFFFFF',
+  textWhite: '#fff',
   textPurple: '#7C3AED',
 
   // ── Semantic ───────────────────────────────────────────────────
