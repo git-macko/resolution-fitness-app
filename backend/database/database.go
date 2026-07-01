@@ -1,5 +1,7 @@
 // Package database handles the SQLite database connection and migrations.
-// It uses the standard database/sql package with the go-sqlite3 driver.
+// It uses the standard database/sql package with a pure-Go SQLite driver
+// (modernc.org/sqlite) so the backend compiles without cgo and no longer
+// requires CC/CXX to be set to an external C compiler.
 // All migrations run on startup — tables are created IF NOT EXISTS so
 // this is safe to run repeatedly.
 package database
@@ -8,8 +10,18 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	sqlite "modernc.org/sqlite"
 )
+
+// Register the pure-Go SQLite driver under the legacy "sqlite3" driver name.
+// Without this alias, `sql.Open("sqlite3", ...)` call sites would need to be
+// changed to `sql.Open("sqlite", ...)` (modernc.org/sqlite's default name).
+// Keeping the existing "sqlite3" name means zero touch-ups across handlers,
+// tests, and main.go. Both names end up registered (modernc registers "sqlite"
+// in its own init); the duplicate slot is harmless.
+func init() {
+	sql.Register("sqlite3", &sqlite.Driver{})
+}
 
 // DB is the global database connection pool.
 // It is safe for concurrent use by multiple goroutines.

@@ -1280,9 +1280,10 @@ export default function CreatePlanScreen({ navigation, route }) {
             >
               {saving ? (
                 <ActivityIndicator color={Colors.white} size="small" />
-              ) : (                  <Text style={styles.primaryBtnText}>
-                    {isEditing ? 'Update Routine' : 'Create Routine'}
-                  </Text>
+              ) : (
+                <Text style={styles.primaryBtnText}>
+                  {isEditing ? 'Update Routine' : 'Create Routine'}
+                </Text>
               )}
             </TouchableOpacity>
 

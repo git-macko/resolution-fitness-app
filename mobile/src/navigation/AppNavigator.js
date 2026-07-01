@@ -1,14 +1,20 @@
 // Resolution Fitness App — Navigation
-// Root navigator with conditional auth flow.
+// Root navigator with conditional auth flow, now theme-aware.
 // Authenticated users see bottom tabs; unauthenticated see auth stack.
+//
+// Tab bar / header chrome reads from `useTheme()` so the navigation
+// chrome (tabsAndHeader light orange cream / gray) flips with the
+// active scheme without recompiling.
 
-import React from 'react';
-import { ActivityIndicator, View, Text, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useMemo, useRef, useEffect } from 'react';
+import { ActivityIndicator, View, Text, StyleSheet, Animated, Pressable, Platform } from 'react-native';
+import { NavigationContainer, DarkTheme as NavDarkTheme, DefaultTheme as NavLightTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '../contexts/AuthContext';
-import Colors from '../theme/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 
 // ── Auth Screens ──────────────────────────────────────────────────
@@ -35,12 +41,13 @@ const Tab = createBottomTabNavigator();
 
 // ── Auth Stack (Login / Register / Onboarding) ────────────────────
 function AuthStack() {
+  const { colors } = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-        contentStyle: { backgroundColor: Colors.offWhite },
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
@@ -50,18 +57,22 @@ function AuthStack() {
   );
 }
 
+// ── Header chrome for nested-stack screens (Chat, Settings, etc.) ──
+function themedStackScreenOptions({ colors }) {
+  return {
+    headerStyle: { backgroundColor: colors.headerBg },
+    headerTintColor: colors.headerText,
+    headerTitleStyle: { ...Typography.h4, color: colors.headerText },
+    headerShadowVisible: false,
+    contentStyle: { backgroundColor: colors.background },
+  };
+}
+
 // ── Dashboard Stack ───────────────────────────────────────────────
 function DashboardStack() {
+  const { colors } = useTheme();
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: Colors.headerBg },
-        headerTintColor: Colors.headerText,
-        headerTitleStyle: { ...Typography.h4 },
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: Colors.offWhite },
-      }}
-    >
+    <Stack.Navigator screenOptions={themedStackScreenOptions({ colors })}>
       <Stack.Screen
         name="DashboardHome"
         component={DashboardScreen}
@@ -78,16 +89,9 @@ function DashboardStack() {
 
 // ── Fitness Stack ─────────────────────────────────────────────────
 function FitnessStack() {
+  const { colors } = useTheme();
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: Colors.headerBg },
-        headerTintColor: Colors.headerText,
-        headerTitleStyle: { ...Typography.h4 },
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: Colors.offWhite },
-      }}
-    >
+    <Stack.Navigator screenOptions={themedStackScreenOptions({ colors })}>
       <Stack.Screen
         name="FitnessHome"
         component={FitnessScreen}
@@ -108,22 +112,20 @@ function FitnessStack() {
         component={CreatePlanScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{ title: 'AI Coach' }}
+      />
     </Stack.Navigator>
   );
 }
 
 // ── Health Stack ──────────────────────────────────────────────────
 function HealthStack() {
+  const { colors } = useTheme();
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: Colors.headerBg },
-        headerTintColor: Colors.headerText,
-        headerTitleStyle: { ...Typography.h4 },
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: Colors.offWhite },
-      }}
-    >
+    <Stack.Navigator screenOptions={themedStackScreenOptions({ colors })}>
       <Stack.Screen
         name="HealthHome"
         component={HealthScreen}
@@ -134,22 +136,20 @@ function HealthStack() {
         component={FoodScanScreen}
         options={{ title: 'Scan Food' }}
       />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{ title: 'AI Coach' }}
+      />
     </Stack.Navigator>
   );
 }
 
 // ── Account Stack ─────────────────────────────────────────────────
 function AccountStack() {
+  const { colors } = useTheme();
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: Colors.headerBg },
-        headerTintColor: Colors.headerText,
-        headerTitleStyle: { ...Typography.h4 },
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: Colors.offWhite },
-      }}
-    >
+    <Stack.Navigator screenOptions={themedStackScreenOptions({ colors })}>
       <Stack.Screen
         name="AccountHome"
         component={AccountScreen}
@@ -160,53 +160,195 @@ function AccountStack() {
         component={SettingsScreen}
         options={{ title: 'Settings' }}
       />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{ title: 'AI Coach' }}
+      />
     </Stack.Navigator>
   );
 }
 
-// ── Tab Icon Component ────────────────────────────────────────────
-// Simple text-based icons (no external icon library needed)
-function TabIcon({ label, focused }) {
-  const icons = {
-    Dashboard: focused ? '◉' : '○',
-    Fitness: focused ? '◆' : '◇',
-    Health: focused ? '♥' : '♡',
-    Account: focused ? '●' : '○',
-  };
+// ── Helpers ──────────────────────────────────────────────────────
+/** Converts a 6-char hex color + alpha (0–1) to an rgba() string. */
+function hexAlpha(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// ── Tab Icon Map ──────────────────────────────────────────────────
+// Each tab maps to [outlineName, filledName] Ionicons.
+const TAB_ICONS = {
+  Dashboard: ['grid-outline', 'grid'],
+  Fitness: ['barbell-outline', 'barbell'],
+  Health: ['heart-outline', 'heart'],
+  Account: ['person-outline', 'person'],
+};
+
+// ── Animated Tab Icon ─────────────────────────────────────────────
+// Bounces aggressively (scale + lift) when the tab becomes active.
+// The icon overshoots then settles for a lively, playful feel.
+function TabIcon({ label, focused, color, accentColor }) {
+  const scale = useRef(new Animated.Value(focused ? 1.2 : 1)).current;
+  const translateY = useRef(new Animated.Value(focused ? -4 : 0)).current;
+  const opacity = useRef(new Animated.Value(focused ? 1 : 0.55)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (focused) {
+      // Phase 1: overshoot
+      Animated.parallel([
+        Animated.spring(scale, {
+          toValue: 1.3,
+          useNativeDriver: true,
+          speed: 18,
+          bounciness: 18,
+        }),
+        Animated.spring(translateY, {
+          toValue: -6,
+          useNativeDriver: true,
+          speed: 18,
+          bounciness: 18,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        if (cancelled) return;
+        // Phase 2: settle to resting active state
+        Animated.parallel([
+          Animated.spring(scale, {
+            toValue: 1.18,
+            useNativeDriver: true,
+            speed: 30,
+            bounciness: 8,
+          }),
+          Animated.spring(translateY, {
+            toValue: -3,
+            useNativeDriver: true,
+            speed: 30,
+            bounciness: 8,
+          }),
+        ]).start();
+      });
+    } else {
+      // Deactivate: spring back to rest
+      Animated.parallel([
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 30,
+          bounciness: 6,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          speed: 30,
+          bounciness: 6,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.55,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+
+    return () => {
+      cancelled = true;
+      scale.stopAnimation();
+      translateY.stopAnimation();
+      opacity.stopAnimation();
+    };
+  }, [focused]);
+
+  const [outlineName, filledName] = TAB_ICONS[label] || [
+    'ellipse-outline',
+    'ellipse',
+  ];
+  const name = focused ? filledName : outlineName;
+
   return (
-    <Text
-      style={{
-        fontSize: 22,
-        color: focused ? Colors.tabBarActive : Colors.tabBarInactive,
-      }}
+    <Animated.View
+      style={[
+        styles.iconWrap,
+        focused && { backgroundColor: hexAlpha(accentColor, 0.12) },
+        { transform: [{ scale }, { translateY }], opacity },
+      ]}
     >
-      {icons[label] || '○'}
-    </Text>
+      <Ionicons name={name} size={24} color={color} />
+      {focused && (
+        <View
+          style={[
+            styles.activeIndicator,
+            { backgroundColor: color },
+          ]}
+        />
+      )}
+    </Animated.View>
+  );
+}
+
+// ── Tab Button ───────────────────────────────────────────────────
+// Simple Pressable wrapper that fires haptic feedback on tap.
+// The press animation lives in TabIcon, not here.
+function TabButton({ children, onPress, ...rest }) {
+  const handlePress = (e) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress?.(e);
+  };
+
+  return (
+    <Pressable
+      {...rest}
+      onPress={handlePress}
+      style={styles.tabButton}
+    >
+      {children}
+    </Pressable>
   );
 }
 
 // ── Main Tab Navigator ────────────────────────────────────────────
 function MainTabs() {
+  const { colors } = useTheme();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused }) => (
-          <TabIcon label={route.name} focused={focused} />
+        animation: 'fade',
+        tabBarIcon: ({ focused, color }) => (
+          <TabIcon label={route.name} focused={focused} color={color} accentColor={colors.tabBarActive} />
         ),
-        tabBarActiveTintColor: Colors.tabBarActive,
-        tabBarInactiveTintColor: Colors.tabBarInactive,
+        tabBarButton: (props) => <TabButton {...props} />,
+        tabBarActiveTintColor: colors.tabBarActive,
+        tabBarInactiveTintColor: colors.tabBarInactive,
         tabBarStyle: {
-          backgroundColor: Colors.tabBarBg,
-          borderTopColor: Colors.tabBarBorder,
-          borderTopWidth: 1,
+          backgroundColor: colors.tabBarBg,
+          borderTopColor: colors.tabBarBorder,
+          borderTopWidth: 0,
           height: 90,
           paddingBottom: 8,
           paddingTop: 8,
+          ...Platform.select({
+            ios: {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 8,
+            },
+            android: { elevation: 8 },
+          }),
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
+          letterSpacing: 0.3,
         },
       })}
     >
@@ -220,13 +362,13 @@ function MainTabs() {
 
 // ── Onboarding-only Stack ─────────────────────────────────────────
 // Used when user is logged in but hasn't completed onboarding.
-// Only shows the Onboarding screen (no back navigation to auth).
 function OnboardingStack() {
+  const { colors } = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: Colors.white },
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
@@ -236,27 +378,47 @@ function OnboardingStack() {
 
 // ── Root Navigator ────────────────────────────────────────────────
 function LoadingScreen() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.loading}>
-      <ActivityIndicator size="large" color={Colors.primary} />
-      <Text style={styles.loadingText}>Loading...</Text>
+    <View style={[styles.loading, { backgroundColor: colors.background }]}>
+      <ActivityIndicator size="large" color={colors.accent} />
+      <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+        Loading...
+      </Text>
     </View>
   );
 }
 
 export default function AppNavigator() {
   const { user, loading } = useAuth();
+  const { scheme, colors } = useTheme();
+
+  // Build a NavigationContainer theme that matches our tokens so things like
+  // the iOS modal backdrop and back-button tint blend with the chrome.
+  const navTheme = useMemo(() => {
+    const base = scheme === 'dark' ? NavDarkTheme : NavLightTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        background: colors.background,
+        card: colors.tabsAndHeader,
+        primary: colors.accent,
+        text: colors.textPrimary,
+        border: colors.border,
+        notification: colors.error,
+      },
+    };
+  }, [scheme, colors]);
 
   if (loading) {
     return <LoadingScreen />;
   }
 
-  // If logged in but onboarding not completed, show onboarding-only stack
-  // (prevents navigation back to Login/Register)
   const showOnboarding = user && !user.onboardingCompleted;
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navTheme}>
       {user ? (
         showOnboarding ? (
           <OnboardingStack />
@@ -275,11 +437,28 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.offWhite,
     gap: 16,
   },
   loadingText: {
     ...Typography.bodySmall,
-    color: Colors.textSecondary,
+  },
+  // ── Tab icon styles ─────────────────────────────────────────────
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 36,
+    borderRadius: 12,
+  },
+  activeIndicator: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 3,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

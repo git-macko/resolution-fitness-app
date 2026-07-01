@@ -6,9 +6,9 @@ A full-stack gym fitness mobile app with a **Go backend** (REST API + SQLite) an
 ## Tech Stack
 
 ### Backend (Go)
-- **Language:** Go 1.22+
+- **Language:** Go 1.25+
 - **Router:** `net/http` with Go 1.22+ pattern matching (`"POST /api/plans/{planId}"`)
-- **Database:** SQLite via `mattn/go-sqlite3` (WAL mode, foreign keys ON)
+- **Database:** SQLite via `modernc.org/sqlite` (pure-Go driver, WAL mode, foreign keys ON)
 - **Authentication:** JWT (`golang-jwt/jwt/v5`) with bcrypt password hashing
 - **Migrations:** Inline `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` additions on startup
 - **CORS:** Custom middleware
@@ -17,10 +17,12 @@ A full-stack gym fitness mobile app with a **Go backend** (REST API + SQLite) an
 ### Mobile (React Native / Expo)
 - **Framework:** React Native via Expo (SDK 54, managed workflow)
 - **Navigation:** React Navigation v7 (bottom tabs + native stacks)
-- **State:** React Context (AuthContext)
+- **State:** React Context (AuthContext, ThemeContext)
 - **HTTP Client:** `fetch` with JWT interceptor
 - **Expo Libraries:** expo-camera, expo-image-picker, expo-haptics,
-  expo-linear-gradient, AsyncStorage
+  expo-linear-gradient, expo-splash-screen, expo-asset, expo-status-bar
+- **Testing:** Jest + jest-expo
+- **Storage:** AsyncStorage
 
 ## Project Structure
 
@@ -48,14 +50,27 @@ Resolution-fitnessapp/
 │   └── database.db                   # SQLite database file (auto-created)
 │
 ├── mobile/                           # React Native Expo app
-│   ├── App.js                        # Root component
+│   ├── App.js                        # Root component (splash anim + theme + auth providers)
 │   ├── app.json                      # Expo config
+│   ├── index.js                      # Expo registerRootComponent
+│   ├── jest.config.js                # Jest test config
+│   ├── tsconfig.json                 # TypeScript config stub
 │   ├── src/
 │   │   ├── api/
 │   │   │   ├── client.js             # HTTP client + token management
 │   │   │   └── config.js             # API base URL config
+│   │   ├── components/               # Reusable UI components
+│   │   │   ├── Card.js               # Generic card container
+│   │   │   ├── ExerciseLibrary.js    # Exercise browser with muscle group filters
+│   │   │   ├── HeroCard.js           # Dashboard hero card
+│   │   │   ├── HeroStat.js           # Dashboard stat display
+│   │   │   ├── Logo.js               # App logo component
+│   │   │   ├── MimiMark.js           # Branded mark component
+│   │   │   ├── SplashAnimation.js    # Animated splash screen overlay
+│   │   │   └── TodaysSummary.js      # Dashboard daily summary
 │   │   ├── contexts/
-│   │   │   └── AuthContext.js         # Global auth state
+│   │   │   ├── AuthContext.js         # Global auth state
+│   │   │   └── ThemeContext.js        # Light/dark theme state
 │   │   ├── navigation/
 │   │   │   └── AppNavigator.js        # Tab + stack navigation
 │   │   ├── screens/                   # All app screens
@@ -65,8 +80,18 @@ Resolution-fitnessapp/
 │   │   │   ├── AccountScreen.js, SettingsScreen.js
 │   │   │   ├── ChatScreen.js
 │   │   │   ├── CreatePlanScreen.js, WorkoutExecutionScreen.js, ExerciseDetailScreen.js
-│   │   ├── theme/                    # colors.js, spacing.js, typography.js
-│   │   └── utils/                    # dates.js
+│   │   │   └── __tests__/            # Screen-level tests
+│   │   ├── theme/                    # Theme system
+│   │   │   ├── card.js               # Card style presets
+│   │   │   ├── colors.js             # Color palette
+│   │   │   ├── outlineText.js        # Outline text style helper
+│   │   │   ├── spacing.js            # Spacing constants
+│   │   │   ├── themes.js             # Light/dark theme definitions
+│   │   │   ├── typography.js         # Typography presets
+│   │   │   └── __tests__/            # Theme tests
+│   │   └── utils/
+│   │       ├── dates.js              # Date formatting helpers
+│   │       └── usePressScale.js      # Press animation hook
 │
 ├── scripts/                          # Utility scripts
 │   ├── update-lan-ip.sh
@@ -148,7 +173,7 @@ These are from the original specification but deferred or simplified:
 - **Workout Templates** — Cached in-memory Go structs (not seeded in DB yet)
 - **Offline resilience** — No local caching of API data
 - **Push notifications** — Not configured
-- **Dark mode** — Not implemented
+- **Dark mode** — Implemented via ThemeContext (light/dark scheme)
 - **Drag-and-drop exercise reordering** — Not implemented
 - **BMI calculator** — Not implemented
 - **Data export** — Not implemented
@@ -266,19 +291,32 @@ npx expo start
 Configure the API URL in `mobile/src/api/config.js`.
 
 ## Running Tests
+
+### Backend
 ```bash
 cd Resolution-fitnessapp/backend
-go test ./handlers/ -v
+go test ./... -v
 ```
 
 16 unit tests covering: CreatePlan limits, SetActivePlan activation/reset,
 ClonePlan limits, GetPlans auto-delete.
 
+### Mobile
+```bash
+cd Resolution-fitnessapp/mobile
+npx jest
+```
+
+Tests cover theme utilities and screen components.
+
 ## Design Decisions
 
 - **SQLite over PostgreSQL** for zero-config development — no server needed
 - **Inline migrations** over versioned migration files — simpler for a single-developer project
-- **JavaScript over TypeScript** for the mobile app — faster iteration
+- **JavaScript over TypeScript** for the mobile app — faster iteration (tsconfig included as stub)
+- **Theme system** — Light/dark mode supported via ThemeContext with reactive StatusBar
+- **Pure-Go SQLite driver** (`modernc.org/sqlite`) — no C compiler required, cross-platform
+- **Splash screen** — Custom animated overlay with logo fade + overlay fade-out via expo-splash-screen
 - **Handlers contain business logic** over a separate `services/` layer —
   keeps the codebase simpler at this scale
 - **Routine constraints** (max 2 consistent, max 3 one-time) enforced

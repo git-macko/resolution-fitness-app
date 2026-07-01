@@ -16,7 +16,8 @@ export const Typography = {
     fontSize: 40,
     fontWeight: Fonts.extrabold,
     lineHeight: 40,
-    letterSpacing: -0.5,
+    letterSpacing: 0.5,
+    padding: 5
   },
   h2: {
     fontSize: 28,
@@ -25,9 +26,10 @@ export const Typography = {
     letterSpacing: -0.3,
   },
   h3: {
-    fontSize: 28,
+    fontSize: 23,
     fontWeight: Fonts.semibold,
     lineHeight: 28,
+    padding: 3
   },
   h4: {
     fontSize: 24,

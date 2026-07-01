@@ -1,9 +1,11 @@
 # ── Expo ────────────────────────────────────────────────────────────
 mobile/.expo/
 mobile/node_modules/
+mobile/dist/
 
 # ── Go backend ─────────────────────────────────────────────────────
 backend/resolution-server
+backend/*.exe
 backend/server.log
 backend/uploads/
 

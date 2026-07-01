@@ -1,59 +1,63 @@
-// Resolution Fitness App — Color Theme
-// White, Black, and Purple design system
+// Resolution Fitness App — Legacy Color Module (DEPRECATED entry point)
 //
-// Design philosophy:
-//   - White + off-white for backgrounds, cards, modals
-//   - Black for text, headers, dark accents
-//   - Purple as the single vibrant highlight — used sparingly
-//     for primary buttons, active states, progress, branding
+// Historically every screen imported `Colors from '../theme/colors'` — a
+// flat object of purple/white/black tokens. With the new theme system the
+// app now supports light + dark modes, and screens should read colors via
+// `useTheme()` and `useThemedStyles()` instead.
+//
+// To avoid breaking the ~10 screens that haven't been migrated yet, this
+// file still exports a flat object — but it now points at the LIGHT theme
+// tokens. Migrated screens (Dashboard, Fitness, Health, Account) no longer
+// import from here.
+//
+// If you're touching a screen that still imports `Colors`, prefer migrating
+// it to `useThemedStyles` rather than adding new tokens here.
+
+import { lightTheme } from './themes';
 
 const Colors = {
-  // ── Primary Purple ─────────────────────────────────────────────
-  primary: '#7C3AED',        // Vivid purple — main accent
-  primaryLight: '#A78BFA',   // Soft purple — hover/light states
-  primaryDark: '#5B21B6',    // Deep purple — pressed/dark states
-  primaryBg: '#F5F3FF',      // Very light purple — backgrounds
+  // Legacy purple tones — kept so old screens don't break visually while
+  // we're in the middle of the migration. New screens should not use them.
+  primary: lightTheme.colors.accent,
+  primaryLight: lightTheme.colors.accentSoft,
+  primaryDark: lightTheme.colors.accentDeep,
+  primaryBg: lightTheme.colors.accentBg,
 
-  // ── Black & White ──────────────────────────────────────────────
-  black: '#000000',
+  black: '#1F2937',
   white: '#FFFFFF',
-  offWhite: '#F5F5F5',       // Screen backgrounds, subtle layers
-  cardBg: '#FFFFFF',         // Card surfaces
+  offWhite: lightTheme.colors.background,
+  cardBg: lightTheme.colors.surface,
 
-  // ── Grays ──────────────────────────────────────────────────────
-  gray100: '#F5F5F5',        // Lightest gray (backgrounds)
-  gray200: '#E5E5E5',        // Borders, dividers
-  gray300: '#D4D4D4',        // Disabled states
-  gray400: '#A3A3A3',        // Muted text, placeholders
-  gray500: '#737373',        // Secondary text
-  gray600: '#525252',        // Body text alternative
-  gray700: '#404040',        // Strong secondary
-  gray800: '#262626',        // Near-black text
-  gray900: '#171717',        // Almost black
+  gray100: '#F3F4F6',
+  gray200: '#E5E7EB',
+  gray300: '#D1D5DB',
+  gray400: '#9CA3AF',
+  gray500: '#6B7280',
+  gray600: '#4B5563',
+  gray700: '#374151',
+  gray800: '#1F2937',
+  gray900: '#111827',
 
-  // ── Text ───────────────────────────────────────────────────────
-  textPrimary: '#000000',
-  textSecondary: '#737373',
-  textMuted: '#A3A3A3',
-  textWhite: '#fff',
-  textPurple: '#7C3AED',
+  textPrimary: lightTheme.colors.textPrimary,
+  textSecondary: lightTheme.colors.textSecondary,
+  textMuted: lightTheme.colors.textMuted,
+  textWhite: '#FFFFFF',
+  textPurple: lightTheme.colors.accent,
 
-  // ── Semantic ───────────────────────────────────────────────────
-  success: '#22C55E',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  info: '#3B82F6',
+  success: lightTheme.colors.success,
+  warning: lightTheme.colors.warning,
+  error: lightTheme.colors.error,
+  info: lightTheme.colors.info,
 
-  // ── Specific UI ────────────────────────────────────────────────
-  tabBarBg: '#FFFFFF',
-  tabBarBorder: '#E5E5E5',
-  tabBarActive: '#7C3AED',
-  tabBarInactive: '#A3A3A3',
-  headerBg: '#FFFFFF',
-  headerText: '#000000',
-  separator: '#F5F5F5',
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  shadow: 'rgba(0, 0, 0, 0.08)',
+  tabBarBg: lightTheme.colors.tabBarBg,
+  tabBarBorder: lightTheme.colors.tabBarBorder,
+  tabBarActive: lightTheme.colors.tabBarActive,
+  tabBarInactive: lightTheme.colors.tabBarInactive,
+  headerBg: lightTheme.colors.headerBg,
+  headerText: lightTheme.colors.headerText,
+  separator: lightTheme.colors.divider,
+  overlay: lightTheme.colors.overlay,
+  shadow: lightTheme.colors.shadow,
 };
 
 export default Colors;

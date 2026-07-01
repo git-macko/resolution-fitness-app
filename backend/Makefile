@@ -10,11 +10,11 @@ build:
 
 # Run tests
 test:
-	go test ./tests/... -v
+	go test ./... -v
 
 # Run all tests with coverage
 test-cover:
-	go test ./tests/... -cover
+	go test ./... -cover
 
 # Clean build artifacts
 clean:

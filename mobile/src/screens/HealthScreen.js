@@ -4,16 +4,23 @@
 
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
   StyleSheet, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../api/client';
+import HeroCard from '../components/HeroCard';
+import HeroStatRow from '../components/HeroStat';
+import Card from '../components/Card';
+import MimiMark from '../components/MimiMark';
 import Colors from '../theme/colors';
 import Typography from '../theme/typography';
-import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
+import { Spacing, BorderRadius, Layout } from '../theme/spacing';
+import usePressScale from '../utils/usePressScale';
 
 export default function HealthScreen({ navigation }) {
+  const mimiPress = usePressScale(0.92);
+
   const [dailyNutrition, setDailyNutrition] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,8 +77,20 @@ export default function HealthScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Health</Text>
-        <Text style={styles.headerSub}>Nutrition & Diet</Text>
+        <View>
+          <Text style={styles.headerTitle}>Health</Text>
+          <Text style={styles.headerSub}>Nutrition & Diet</Text>
+        </View>
+        <Pressable
+          onPress={() => navigation.navigate('Chat')}
+          {...mimiPress.handlers}
+          accessibilityLabel="Ask Mimi"
+        >
+          <Animated.View style={[styles.mimiButton, mimiPress.animatedStyle]}>
+            <MimiMark size={32} />
+            <Text style={styles.mimiLabel}>Ask Mimi</Text>
+          </Animated.View>
+        </Pressable>
       </View>
 
         {/* ── Error Banner ─────────────────────────────────── */}
@@ -89,9 +108,25 @@ export default function HealthScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Hero Card ───────────────────────────────────────── */}
+        <HeroCard
+          topLabel="TODAY"
+          title="Nutrition Summary"
+          subtitle={`${(totals.calories || 0)} kcal today`}
+        >
+          <HeroStatRow
+            stats={[
+              { value: totals.calories || 0, label: 'Calories', tone: 'primary' },
+              { value: `${totals.proteinG || 0}g`, label: 'Protein', tone: 'info' },
+              { value: `${totals.carbsG || 0}g`, label: 'Carbs', tone: 'warning' },
+              { value: `${totals.fatG || 0}g`, label: 'Fat', tone: 'error' },
+            ]}
+          />
+        </HeroCard>
+
         {/* ── Food Scanner Button ─────────────────────────────── */}
         <TouchableOpacity
-          style={[styles.scanBtn, Shadows.md]}
+          style={styles.scanBtn}
           onPress={() => navigation.navigate('FoodScan')}
         >
           <Text style={styles.scanIcon}>📸</Text>
@@ -105,7 +140,7 @@ export default function HealthScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* ── Daily Nutrition Summary ─────────────────────────── */}
-        <View style={[styles.summaryCard, Shadows.sm]}>
+        <Card style={styles.marginBottom} contentStyle={styles.summaryCard}>
           <Text style={styles.sectionTitle}>Today's Intake</Text>
           <View style={styles.macroRow}>
             <View style={styles.macroItem}>
@@ -134,10 +169,10 @@ export default function HealthScreen({ navigation }) {
               <Text style={styles.macroLabel}>Fat</Text>
             </View>
           </View>
-        </View>
+        </Card>
 
         {/* ── Water Tracking ──────────────────────────────────── */}
-        <View style={[styles.waterCard, Shadows.sm]}>
+        <Card style={styles.marginBottom} contentStyle={styles.waterCard}>
           <Text style={styles.sectionTitle}>💧 Water</Text>
           <View style={styles.waterRow}>
             <Text style={styles.waterValue}>{waterData.totalMl || 0}ml</Text>
@@ -164,21 +199,21 @@ export default function HealthScreen({ navigation }) {
           >
             <Text style={styles.addWaterBtnText}>+ Add 250ml</Text>
           </TouchableOpacity>
-        </View>
+        </Card>
 
         {/* ── Preworkout Meals ────────────────────────────────── */}
         {preworkoutMeals.length > 0 && (
           <View>
             <Text style={styles.sectionTitle}>⚡ Pre-Workout Meals</Text>
             {preworkoutMeals.map((meal, idx) => (
-              <View key={meal.id || idx} style={[styles.mealCard, Shadows.sm]}>
+              <Card key={meal.id || idx} style={styles.marginBottomSm} contentStyle={styles.mealCard}>
                 <Text style={styles.mealName}>
                   {meal.name || `Pre-workout Meal ${idx + 1}`}
                 </Text>
                 <Text style={styles.mealCal}>
                   {meal.totalCalories || 0} cal • {meal.totalProteinG || 0}g protein
                 </Text>
-              </View>
+              </Card>
             ))}
           </View>
         )}
@@ -188,14 +223,14 @@ export default function HealthScreen({ navigation }) {
           <View>
             <Text style={styles.sectionTitle}>🔄 Post-Workout Meals</Text>
             {postworkoutMeals.map((meal, idx) => (
-              <View key={meal.id || idx} style={[styles.mealCard, Shadows.sm]}>
+              <Card key={meal.id || idx} style={styles.marginBottomSm} contentStyle={styles.mealCard}>
                 <Text style={styles.mealName}>
                   {meal.name || `Post-workout Meal ${idx + 1}`}
                 </Text>
                 <Text style={styles.mealCal}>
                   {meal.totalCalories || 0} cal • {meal.totalProteinG || 0}g protein
                 </Text>
-              </View>
+              </Card>
             ))}
           </View>
         )}
@@ -205,14 +240,14 @@ export default function HealthScreen({ navigation }) {
           <View>
             <Text style={styles.sectionTitle}>🥗 Meals</Text>
             {generalMeals.map((meal, idx) => (
-              <View key={meal.id || idx} style={[styles.mealCard, Shadows.sm]}>
+              <Card key={meal.id || idx} style={styles.marginBottomSm} contentStyle={styles.mealCard}>
                 <Text style={styles.mealName}>
                   {meal.name || `Meal ${idx + 1}`}
                 </Text>
                 <Text style={styles.mealCal}>
                   {meal.totalCalories || 0} cal • {meal.totalProteinG || 0}g protein
                 </Text>
-              </View>
+              </Card>
             ))}
           </View>
         )}
@@ -222,7 +257,12 @@ export default function HealthScreen({ navigation }) {
           <View>
             <Text style={styles.sectionTitle}>💡 Suggestions For You</Text>
             {suggestions.map((suggestion, idx) => (
-              <View key={idx} style={[styles.suggestionCard, Shadows.sm]}>
+              <Card
+                key={idx}
+                backgroundColor={Colors.white}
+                style={styles.marginBottomSm}
+                contentStyle={styles.suggestionCard}
+              >
                 <Text style={styles.suggestionTitle}>
                   {suggestion.title || suggestion.name || 'Meal Suggestion'}
                 </Text>
@@ -237,7 +277,7 @@ export default function HealthScreen({ navigation }) {
                     {suggestion.proteinG || 0}g protein
                   </Text>
                 </View>
-              </View>
+              </Card>
             ))}
           </View>
         )}
@@ -281,31 +321,49 @@ const styles = StyleSheet.create({
     paddingTop: Layout.screenTopPadding,
     paddingBottom: Spacing.lg,
     backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTitle: { ...Typography.h1, color: Colors.black },
   headerSub: { ...Typography.bodySmall, color: Colors.textSecondary, marginTop: Spacing.xs },
+  mimiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  mimiLabel: {
+    ...Typography.bodySmall,
+    color: Colors.gray500,
+    fontWeight: '600',
+  },
   scrollContent: { padding: Spacing.xl },
   sectionTitle: { ...Typography.bodyMedium, color: Colors.black, marginBottom: Spacing.md, marginTop: Spacing.lg },
+  marginBottom: { marginBottom: Spacing.lg },
+  marginBottomSm: { marginBottom: Spacing.sm },
   // ── Scan Button ───────────────────────────────────────────
   scanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
     borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+    borderColor: Colors.primary,
     padding: Spacing.xl,
     marginBottom: Spacing.lg,
   },
   scanIcon: { fontSize: 36, marginRight: Spacing.lg },
   scanTextWrap: { flex: 1 },
-  scanTitle: { ...Typography.h4, color: Colors.white },
-  scanSub: { ...Typography.caption, color: Colors.primaryLight, marginTop: 2 },
-  scanArrow: { fontSize: 24, color: Colors.white },
+  scanTitle: { ...Typography.h4, color: Colors.primary, fontWeight: '700' },
+  scanSub: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
+  scanArrow: { fontSize: 24, color: Colors.primary },
   // ── Summary ───────────────────────────────────────────────
   summaryCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
   },
   macroRow: { flexDirection: 'row', alignItems: 'center' },
   macroItem: { flex: 1, alignItems: 'center' },
@@ -314,10 +372,7 @@ const styles = StyleSheet.create({
   macroDivider: { width: 1, height: 28, backgroundColor: Colors.gray200 },
   // ── Water ─────────────────────────────────────────────────
   waterCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
   },
   waterRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: Spacing.md },
   waterValue: { ...Typography.statSmall, color: Colors.info },
@@ -341,19 +396,13 @@ const styles = StyleSheet.create({
   addWaterBtnText: { ...Typography.captionMedium, color: Colors.info },
   // ── Meals ─────────────────────────────────────────────────
   mealCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
-    marginBottom: Spacing.sm,
   },
   mealName: { ...Typography.bodyMedium, color: Colors.textPrimary },
   mealCal: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
   // ── Suggestions ──────────────────────────────────────────
   suggestionCard: {
-    backgroundColor: Colors.primaryBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
-    marginBottom: Spacing.sm,
   },
   suggestionTitle: { ...Typography.bodyMedium, color: Colors.primary },
   suggestionDesc: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },

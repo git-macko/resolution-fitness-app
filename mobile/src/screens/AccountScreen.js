@@ -1,20 +1,66 @@
 // Resolution Fitness App — Account Screen
 // User profile, stats, settings, and account management.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
   StyleSheet, ActivityIndicator, Alert, Image,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import Card from '../components/Card';
+import MimiMark from '../components/MimiMark';
 import Colors from '../theme/colors';
 import Typography from '../theme/typography';
-import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
+import { Spacing, BorderRadius, Layout } from '../theme/spacing';
+import { heroGradient, heroStart, heroEnd, cardShadows } from '../theme/card';
+import usePressScale from '../utils/usePressScale';
+
+/**
+ * AnimatedCounter — counts up from 0 to `value` with a subtle spring-pulse
+ * flourish when the count completes. Used inside the gradient profile
+ * card to animate stat numbers on mount / value change.
+ */
+function AnimatedCounter({ value, style, prefix = '' }) {
+  const [display, setDisplay] = useState(prefix + '0');
+  const animRef = useRef(new Animated.Value(0));
+  const scaleRef = useRef(new Animated.Value(1));
+
+  useEffect(() => {
+    const anim = animRef.current;
+    anim.setValue(0);
+
+    const listener = anim.addListener(({ value: v }) => {
+      setDisplay(prefix + Math.round(v).toString());
+    });
+
+    Animated.timing(anim, {
+      toValue: value,
+      duration: 800,
+      useNativeDriver: false,
+    }).start(() => {
+      // Subtle spring-pulse flourish on completion
+      Animated.sequence([
+        Animated.spring(scaleRef.current, { toValue: 1.15, useNativeDriver: true }),
+        Animated.spring(scaleRef.current, { toValue: 1, useNativeDriver: true }),
+      ]).start();
+    });
+
+    return () => anim.removeListener(listener);
+  }, [value, prefix]);
+
+  return (
+    <Animated.Text style={[style, { transform: [{ scale: scaleRef.current }] }]}>
+      {display}
+    </Animated.Text>
+  );
+}
 
 export default function AccountScreen({ navigation }) {
   const { user, updateUser, logout } = useAuth();
+  const mimiPress = usePressScale(0.92);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,6 +109,22 @@ export default function AccountScreen({ navigation }) {
     ]);
   };
 
+  // ── Stats row entrance animation (fade + slide up) ──────
+  const statsRowOpacity = useRef(new Animated.Value(0)).current;
+  const statsRowTranslateY = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    if (!loading) {
+      const delay = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(statsRowOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+          Animated.timing(statsRowTranslateY, { toValue: 0, duration: 500, useNativeDriver: true }),
+        ]).start();
+      }, 600);
+      return () => clearTimeout(delay);
+    }
+  }, [loading]);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -77,50 +139,63 @@ export default function AccountScreen({ navigation }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Account</Text>
+        <Pressable
+          onPress={() => navigation.navigate('Chat')}
+          {...mimiPress.handlers}
+          accessibilityLabel="Ask Mimi"
+        >
+          <Animated.View style={[styles.mimiButton, mimiPress.animatedStyle]}>
+            <MimiMark size={32} />
+            <Text style={styles.mimiLabel}>Ask Mimi</Text>
+          </Animated.View>
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* ── Profile Card ─────────────────────────────────────── */}
-        <View style={[styles.profileCard, Shadows.md]}>
-          <TouchableOpacity onPress={handlePickPhoto}>
-            <View style={styles.avatar}>
-              {user?.photoUrl ? (
-                <Image source={{ uri: user.photoUrl }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarPlaceholder}>
-                  {(user?.displayName || 'A')[0].toUpperCase()}
-                </Text>
-              )}
-            </View>
-            <Text style={styles.changePhotoHint}>Change photo</Text>
-          </TouchableOpacity>
-          <Text style={styles.displayName}>{user?.displayName || 'Athlete'}</Text>
-          <Text style={styles.email}>{user?.email || ''}</Text>
-        </View>
-
-        {/* ── Stats ────────────────────────────────────────────── */}
-        <View style={[styles.statsCard, Shadows.sm]}>
-          <Text style={styles.sectionTitle}>Your Stats</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.totalWorkouts || 0}</Text>
-              <Text style={styles.statLabel}>Workouts</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.currentStreak || 0}</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.fitnessLevel || 1}</Text>
-              <Text style={styles.statLabel}>Level</Text>
-            </View>
-          </View>
+        {/* ── Profile Card (Gradient) ─────────────────────────── */}
+        <View style={[styles.gradientProfileOuter, cardShadows.strong]}>
+          <LinearGradient
+            colors={[heroGradient.start, heroGradient.end]}
+            locations={[heroGradient.startLocation, heroGradient.endLocation]}
+            start={heroStart}
+            end={heroEnd}
+            style={styles.gradientProfileInner}
+          >
+            <TouchableOpacity onPress={handlePickPhoto}>
+              <View style={styles.avatar}>
+                {user?.photoUrl ? (
+                  <Image source={{ uri: user.photoUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarPlaceholder}>
+                    {(user?.displayName || 'A')[0].toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.changePhotoHint}>Change photo</Text>
+            </TouchableOpacity>
+            <Text style={styles.displayName}>{user?.displayName || 'Athlete'}</Text>
+            <Text style={styles.email}>{user?.email || ''}</Text>
+            <Animated.View style={[styles.profileStatsRow, { opacity: statsRowOpacity, transform: [{ translateY: statsRowTranslateY }] }]}>
+              <View style={styles.profileStatItem}>
+                <AnimatedCounter value={stats.totalWorkouts || 0} style={styles.profileStatValue} />
+                <Text style={styles.profileStatLabel}>Workouts</Text>
+              </View>
+              <View style={styles.profileStatDivider} />
+              <View style={styles.profileStatItem}>
+                <AnimatedCounter value={stats.currentStreak || 0} style={styles.profileStatValue} />
+                <Text style={styles.profileStatLabel}>Day Streak</Text>
+              </View>
+              <View style={styles.profileStatDivider} />
+              <View style={styles.profileStatItem}>
+                <AnimatedCounter value={stats.fitnessLevel || 1} style={styles.profileStatValue} prefix="Lv." />
+                <Text style={styles.profileStatLabel}>Level</Text>
+              </View>
+            </Animated.View>
+          </LinearGradient>
         </View>
 
         {/* ── Profile Info ─────────────────────────────────────── */}
-        <View style={[styles.infoCard, Shadows.sm]}>
+        <Card style={styles.marginBottom} contentStyle={styles.infoCard}>
           <Text style={styles.sectionTitle}>Profile</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Fitness Level</Text>
@@ -147,11 +222,11 @@ export default function AccountScreen({ navigation }) {
               <Text style={styles.infoValue}>{user.heightCm} cm</Text>
             </View>
           )}
-        </View>
+        </Card>
 
         {/* ── Allergies & Diet ─────────────────────────────────── */}
         {(user?.allergies?.length > 0 || user?.dietaryPrefs?.length > 0) && (
-          <View style={[styles.infoCard, Shadows.sm]}>
+          <Card style={styles.marginBottom} contentStyle={styles.infoCard}>
             <Text style={styles.sectionTitle}>Diet & Allergies</Text>
             {user?.allergies?.length > 0 && (
               <View style={styles.tagRow}>
@@ -177,17 +252,18 @@ export default function AccountScreen({ navigation }) {
                 </View>
               </View>
             )}
-          </View>
+          </Card>
         )}
 
         {/* ── Settings Link ────────────────────────────────────── */}
-        <TouchableOpacity
-          style={[styles.menuItem, Shadows.sm]}
+        <Card
+          style={styles.marginBottomMd}
+          contentStyle={styles.menuItem}
           onPress={() => navigation.navigate('Settings')}
         >
           <Text style={styles.menuItemText}>⚙️  Settings</Text>
           <Text style={styles.menuArrow}>→</Text>
-        </TouchableOpacity>
+        </Card>
 
         {/* ── Logout ───────────────────────────────────────────── */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -208,17 +284,40 @@ const styles = StyleSheet.create({
     paddingTop: Layout.screenTopPadding,
     paddingBottom: Spacing.lg,
     backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTitle: { ...Typography.h1, color: Colors.black },
+  mimiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  mimiLabel: {
+    ...Typography.bodySmall,
+    color: Colors.gray500,
+    fontWeight: '600',
+  },
   scrollContent: { padding: Spacing.xl },
   sectionTitle: { ...Typography.bodyMedium, color: Colors.black, marginBottom: Spacing.md },
-  // ── Profile Card ──────────────────────────────────────────
-  profileCard: {
-    backgroundColor: Colors.cardBg,
+  marginBottom: { marginBottom: Spacing.lg },
+  marginBottomMd: { marginBottom: Spacing.md },
+  // ── Gradient Profile Card ────────────────────────────────
+  gradientProfileOuter: {
+    borderRadius: BorderRadius.lg,
+    backgroundColor: heroGradient.start,
+    marginBottom: Spacing.lg,
+  },
+  gradientProfileInner: {
     borderRadius: BorderRadius.lg,
     padding: Spacing['2xl'],
     alignItems: 'center',
-    marginBottom: Spacing.lg,
   },
   avatar: {
     width: 80,
@@ -231,27 +330,25 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: 80, height: 80, borderRadius: 40 },
   avatarPlaceholder: { ...Typography.h2, color: Colors.primary },
-  changePhotoHint: { ...Typography.caption, color: Colors.primary, marginTop: Spacing.sm },
-  displayName: { ...Typography.h3, color: Colors.black, marginTop: Spacing.lg },
-  email: { ...Typography.bodySmall, color: Colors.textSecondary, marginTop: 2 },
-  // ── Stats ─────────────────────────────────────────────────
-  statsCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+  changePhotoHint: { ...Typography.caption, color: 'rgba(255, 255, 255, 0.75)', marginTop: Spacing.sm },
+  displayName: { ...Typography.h3, color: '#FFFFFF', marginTop: Spacing.lg },
+  email: { ...Typography.bodySmall, color: 'rgba(255, 255, 255, 0.75)', marginTop: 2 },
+  // ── Profile Stats Row (inside gradient card) ────────────
+  profileStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.xl,
+    paddingTop: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
   },
-  statsRow: { flexDirection: 'row', alignItems: 'center' },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { ...Typography.statSmall, color: Colors.primary },
-  statLabel: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  statDivider: { width: 1, height: 28, backgroundColor: Colors.gray200 },
+  profileStatItem: { flex: 1, alignItems: 'center' },
+  profileStatValue: { ...Typography.statSmall, color: '#FFFFFF' },
+  profileStatLabel: { ...Typography.caption, color: 'rgba(255, 255, 255, 0.65)', marginTop: 2 },
+  profileStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255, 255, 255, 0.2)' },
   // ── Info Card ─────────────────────────────────────────────
   infoCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
   },
   infoRow: {
     flexDirection: 'row',
@@ -277,13 +374,10 @@ const styles = StyleSheet.create({
   tagTextPurple: { color: Colors.primary },
   // ── Menu ──────────────────────────────────────────────────
   menuItem: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
   },
   menuItemText: { ...Typography.body, color: Colors.textPrimary },
   menuArrow: { ...Typography.body, color: Colors.textMuted },

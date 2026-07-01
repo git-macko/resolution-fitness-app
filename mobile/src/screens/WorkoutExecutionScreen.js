@@ -1,6 +1,9 @@
 // Resolution Fitness App — Workout Execution Screen
 // Full-screen "Lock-In" mode for performing a workout session.
-// Shows exercises, sets, rest timer, and overall session timer.
+// Intentionally dark chrome regardless of system theme — like Apple Fitness+,
+// this screen suppresses distractions by going dark even when the OS theme
+// is light. The accent (orange → gray) still respects the active theme so
+// progress highlights and the rest-timer label stay on-brand.
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -8,11 +11,26 @@ import {
   ScrollView, Alert, Vibration, ActivityIndicator,
 } from 'react-native';
 import api from '../api/client';
-import Colors from '../theme/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
 
+// Hard-coded dark-mode-ish palette (lock-in chrome stays dark in both schemes).
+// We pull a couple of theme-driven overrides (cancel button color / rest
+// label accent) so the brand accent and error treatment still respect theme.
+const LOCKED = {
+  bg: '#000000',
+  cardBg: '#171717',
+  elevatedBg: '#0A0A0A',
+  border: '#262626',
+  divider: '#404040',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#D4D4D4',
+  textMuted: '#A3A3A3',
+};
+
 export default function WorkoutExecutionScreen({ navigation, route }) {
+  const { colors } = useTheme();
   const { planDayId, workoutName } = route.params || {};
   const [session, setSession] = useState(null);
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState(0);
@@ -22,7 +40,6 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
   const timerRef = useRef(null);
   const sessionTimerRef = useRef(null);
 
-  // ── Start the workout session on mount ─────────────────────
   useEffect(() => {
     startSession();
     return () => {
@@ -31,7 +48,6 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
     };
   }, []);
 
-  // ── Session timer (elapsed time) ───────────────────────────
   useEffect(() => {
     sessionTimerRef.current = setInterval(() => {
       setSessionTimer((prev) => prev + 1);
@@ -39,7 +55,6 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
     return () => clearInterval(sessionTimerRef.current);
   }, []);
 
-  // ── Rest timer logic ───────────────────────────────────────
   useEffect(() => {
     if (resting && restTimer > 0) {
       timerRef.current = setInterval(() => {
@@ -121,7 +136,7 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
             if (session?.id || session?.sessionId) {
               await api.cancelWorkout(session.id || session.sessionId);
             }
-          } catch {} // ignore errors
+          } catch {} // ignore
           navigation.goBack();
         },
       },
@@ -135,27 +150,30 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: LOCKED.bg }]}>
       {/* ── Top Bar ──────────────────────────────────────────── */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { backgroundColor: LOCKED.bg }]}>
         <TouchableOpacity onPress={handleCancel}>
-          <Text style={styles.cancelText}>✕ Cancel</Text>
+          <Text style={[styles.cancelText, { color: colors.error }]}>✕ Cancel</Text>
         </TouchableOpacity>
-        <View style={styles.timerBox}>
-          <Text style={styles.timerText}>{formatTime(sessionTimer)}</Text>
+        <View style={[styles.timerBox, { backgroundColor: LOCKED.cardBg }]}>
+          <Text style={[styles.timerText, { color: LOCKED.textPrimary }]}>{formatTime(sessionTimer)}</Text>
         </View>
       </View>
 
       {/* ── Rest Timer Overlay ───────────────────────────────── */}
       {resting && (
-        <View style={styles.restOverlay}>
-          <Text style={styles.restLabel}>REST</Text>
-          <Text style={styles.restTimer}>{formatTime(restTimer)}</Text>
-          <Text style={styles.restNext}>
+        <View style={[styles.restOverlay, { backgroundColor: LOCKED.bg }]}>
+          <Text style={[styles.restLabel, { color: colors.accent }]}>REST</Text>
+          <Text style={[styles.restTimer, { color: LOCKED.textPrimary }]}>{formatTime(restTimer)}</Text>
+          <Text style={[styles.restNext, { color: LOCKED.textMuted }]}>
             Next: {exercises[currentExerciseIdx]?.exerciseName || '—'}
           </Text>
-          <TouchableOpacity style={styles.skipBtn} onPress={skipRest}>
-            <Text style={styles.skipBtnText}>Skip Rest</Text>
+          <TouchableOpacity
+            style={[styles.skipBtn, { borderColor: LOCKED.divider }]}
+            onPress={skipRest}
+          >
+            <Text style={[styles.skipBtnText, { color: LOCKED.textPrimary }]}>Skip Rest</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -163,97 +181,105 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
       {/* ── Exercise Content ─────────────────────────────────── */}
       {currentExercise && !resting && (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Progress */}
-          <Text style={styles.progress}>
+          <Text style={[styles.progress, { color: colors.accent }]}>
             Exercise {currentExerciseIdx + 1} of {exercises.length}
           </Text>
 
-          {/* Exercise Name */}
-          <Text style={styles.exerciseName}>
+          <Text style={[styles.exerciseName, { color: LOCKED.textPrimary }]}>
             {currentExercise.exerciseName || currentExercise.name}
           </Text>
-          <Text style={styles.muscleGroup}>
+          <Text style={[styles.muscleGroup, { color: LOCKED.textMuted }]}>
             {currentExercise.muscleGroup}
           </Text>
 
-          {/* Target */}
-          <View style={styles.targetCard}>
+          <View style={[styles.targetCard, { backgroundColor: LOCKED.cardBg }]}>
             <View style={styles.targetItem}>
-              <Text style={styles.targetValue}>
+              <Text style={[styles.targetValue, { color: LOCKED.textPrimary }]}>
                 {currentExercise.targetSets || 3}
               </Text>
-              <Text style={styles.targetLabel}>Sets</Text>
+              <Text style={[styles.targetLabel, { color: LOCKED.textMuted }]}>Sets</Text>
             </View>
-            <View style={styles.targetDivider} />
+            <View style={[styles.targetDivider, { backgroundColor: LOCKED.border }]} />
             <View style={styles.targetItem}>
-              <Text style={styles.targetValue}>
+              <Text style={[styles.targetValue, { color: LOCKED.textPrimary }]}>
                 {currentExercise.targetReps || '8-12'}
               </Text>
-              <Text style={styles.targetLabel}>Reps</Text>
+              <Text style={[styles.targetLabel, { color: LOCKED.textMuted }]}>Reps</Text>
             </View>
-            <View style={styles.targetDivider} />
+            <View style={[styles.targetDivider, { backgroundColor: LOCKED.border }]} />
             <View style={styles.targetItem}>
-              <Text style={styles.targetValue}>
+              <Text style={[styles.targetValue, { color: LOCKED.textPrimary }]}>
                 {currentExercise.targetWeight || 0}kg
               </Text>
-              <Text style={styles.targetLabel}>Weight</Text>
+              <Text style={[styles.targetLabel, { color: LOCKED.textMuted }]}>Weight</Text>
             </View>
           </View>
 
-          {/* Quick Log Sets */}
-          <Text style={styles.sectionTitle}>Log Sets</Text>
+          <Text style={[styles.sectionTitle, { color: LOCKED.textPrimary }]}>Log Sets</Text>
           {[1, 2, 3, 4, 5].map((setNum) => (
-            <TouchableOpacity key={setNum} style={styles.setRow}>
-              <Text style={styles.setNumber}>Set {setNum}</Text>
+            <TouchableOpacity
+              key={setNum}
+              style={[styles.setRow, { backgroundColor: LOCKED.cardBg }]}
+            >
+              <Text style={[styles.setNumber, { color: LOCKED.textMuted }]}>Set {setNum}</Text>
               <View style={styles.setInputs}>
                 <View style={styles.setField}>
-                  <Text style={styles.setFieldLabel}>Reps</Text>
-                  <Text style={styles.setFieldValue}>—</Text>
+                  <Text style={[styles.setFieldLabel, { color: LOCKED.textMuted }]}>Reps</Text>
+                  <Text style={[styles.setFieldValue, { color: LOCKED.textPrimary }]}>—</Text>
                 </View>
                 <View style={styles.setField}>
-                  <Text style={styles.setFieldLabel}>Weight</Text>
-                  <Text style={styles.setFieldValue}>— kg</Text>
+                  <Text style={[styles.setFieldLabel, { color: LOCKED.textMuted }]}>Weight</Text>
+                  <Text style={[styles.setFieldValue, { color: LOCKED.textPrimary }]}>— kg</Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.checkBtn}>
-                <Text style={styles.checkBtnIcon}>○</Text>
+                <Text style={[styles.checkBtnIcon, { color: LOCKED.textMuted }]}>○</Text>
               </TouchableOpacity>
             </TouchableOpacity>
           ))}
 
-          {/* Navigation Buttons */}
           <View style={styles.navRow}>
             <TouchableOpacity
-              style={[styles.navBtn, currentExerciseIdx === 0 && styles.navBtnDisabled]}
+              style={[
+                styles.navBtn,
+                { backgroundColor: LOCKED.cardBg },
+                currentExerciseIdx === 0 && styles.navBtnDisabled,
+              ]}
               onPress={prevExercise}
               disabled={currentExerciseIdx === 0}
             >
-              <Text style={styles.navBtnText}>← Previous</Text>
+              <Text style={[styles.navBtnText, { color: LOCKED.textPrimary }]}>← Previous</Text>
             </TouchableOpacity>
             {currentExerciseIdx < exercises.length - 1 ? (
-              <TouchableOpacity style={[styles.navBtn, styles.navBtnPrimary]} onPress={nextExercise}>
-                <Text style={[styles.navBtnText, styles.navBtnPrimaryText]}>Next →</Text>
+              <TouchableOpacity
+                style={[styles.navBtn, { backgroundColor: colors.accent }]}
+                onPress={nextExercise}
+              >
+                <Text style={[styles.navBtnText, styles.navBtnPrimaryText, { color: colors.textInverse }]}>Next →</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={[styles.navBtn, styles.completeBtn]} onPress={handleComplete}>
-                <Text style={styles.completeBtnText}>✓ Complete</Text>
+              <TouchableOpacity
+                style={[styles.navBtn, { backgroundColor: colors.success }]}
+                onPress={handleComplete}
+              >
+                <Text style={[styles.completeBtnText, { color: colors.textInverse }]}>✓ Complete</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <TouchableOpacity
-            style={styles.restBtn}
+            style={[styles.restBtn, { borderColor: LOCKED.divider }]}
             onPress={() => startRestTimer(60)}
           >
-            <Text style={styles.restBtnText}>Start Rest Timer (60s)</Text>
+            <Text style={[styles.restBtnText, { color: LOCKED.textMuted }]}>Start Rest Timer (60s)</Text>
           </TouchableOpacity>
         </ScrollView>
       )}
 
       {exercises.length === 0 && !resting && (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={{ color: Colors.textSecondary, marginTop: 16 }}>Loading workout...</Text>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={{ color: LOCKED.textMuted, marginTop: 16 }}>Loading workout...</Text>
         </View>
       )}
     </View>
@@ -261,7 +287,7 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.black },
+  container: { flex: 1 },
   // ── Top Bar ────────────────────────────────────────────────
   topBar: {
     flexDirection: 'row',
@@ -270,69 +296,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingTop: Layout.screenTopPadding,
     paddingBottom: Spacing.md,
-    backgroundColor: Colors.black,
   },
-  cancelText: { ...Typography.bodySmall, color: Colors.error },
+  cancelText: { ...Typography.bodySmall, fontWeight: '600' },
   timerBox: {
-    backgroundColor: Colors.gray800,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.full,
   },
-  timerText: { ...Typography.bodyMedium, color: Colors.white, fontVariant: ['tabular-nums'] },
+  timerText: { ...Typography.bodyMedium, fontVariant: ['tabular-nums'] },
   // ── Rest Overlay ───────────────────────────────────────────
   restOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.black,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
   },
-  restLabel: { ...Typography.label, color: Colors.primary, letterSpacing: 8, marginBottom: Spacing.lg },
-  restTimer: { fontSize: 80, fontWeight: '800', color: Colors.white, fontVariant: ['tabular-nums'] },
-  restNext: { ...Typography.body, color: Colors.textMuted, marginTop: Spacing.xl },
+  restLabel: { ...Typography.label, letterSpacing: 8, marginBottom: Spacing.lg },
+  restTimer: { fontSize: 80, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  restNext: { ...Typography.body, marginTop: Spacing.xl },
   skipBtn: {
     marginTop: Spacing['3xl'],
     paddingHorizontal: Spacing['3xl'],
     paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.gray600,
   },
-  skipBtnText: { ...Typography.bodyMedium, color: Colors.white },
+  skipBtnText: { ...Typography.bodyMedium },
   // ── Content ────────────────────────────────────────────────
   scrollContent: { padding: Spacing.xl },
-  progress: { ...Typography.caption, color: Colors.primary, marginBottom: Spacing.xs },
-  exerciseName: { ...Typography.h1, color: Colors.white, marginBottom: Spacing.xs },
-  muscleGroup: { ...Typography.caption, color: Colors.textMuted, marginBottom: Spacing.xl },
+  progress: { ...Typography.caption, marginBottom: Spacing.xs },
+  exerciseName: { ...Typography.h1, marginBottom: Spacing.xs },
+  muscleGroup: { ...Typography.caption, marginBottom: Spacing.xl },
   targetCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.gray900,
     borderRadius: BorderRadius.md,
     padding: Spacing.lg,
     marginBottom: Spacing['2xl'],
   },
   targetItem: { flex: 1, alignItems: 'center' },
-  targetValue: { ...Typography.statSmall, color: Colors.white },
-  targetLabel: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  targetDivider: { width: 1, height: 32, backgroundColor: Colors.gray800 },
+  targetValue: { ...Typography.statSmall },
+  targetLabel: { ...Typography.caption, marginTop: 2 },
+  targetDivider: { width: 1, height: 32 },
   // ── Sets ───────────────────────────────────────────────────
-  sectionTitle: { ...Typography.bodyMedium, color: Colors.white, marginBottom: Spacing.md },
+  sectionTitle: { ...Typography.bodyMedium, marginBottom: Spacing.md },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.gray900,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
   },
-  setNumber: { ...Typography.captionMedium, color: Colors.textMuted, width: 50 },
+  setNumber: { ...Typography.captionMedium, width: 50 },
   setInputs: { flex: 1, flexDirection: 'row', gap: Spacing.md },
   setField: { flex: 1 },
-  setFieldLabel: { ...Typography.caption, color: Colors.textMuted },
-  setFieldValue: { ...Typography.bodySmall, color: Colors.white },
+  setFieldLabel: { ...Typography.caption },
+  setFieldValue: { ...Typography.bodySmall },
   checkBtn: { padding: Spacing.sm },
-  checkBtnIcon: { fontSize: 24, color: Colors.textMuted },
+  checkBtnIcon: { fontSize: 24 },
   // ── Navigation ─────────────────────────────────────────────
   navRow: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing['2xl'] },
   navBtn: {
@@ -340,23 +360,19 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
-    backgroundColor: Colors.gray900,
   },
   navBtnDisabled: { opacity: 0.4 },
-  navBtnPrimary: { backgroundColor: Colors.primary },
-  navBtnText: { ...Typography.bodyMedium, color: Colors.white },
+  navBtnText: { ...Typography.bodyMedium },
   navBtnPrimaryText: { fontWeight: '700' },
-  completeBtn: { backgroundColor: Colors.success },
-  completeBtnText: { ...Typography.bodyMedium, color: Colors.white, fontWeight: '700' },
+  completeBtnText: { ...Typography.bodyMedium, fontWeight: '700' },
   restBtn: {
     marginTop: Spacing.lg,
     paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.gray600,
   },
-  restBtnText: { ...Typography.bodyMedium, color: Colors.textMuted },
+  restBtnText: { ...Typography.bodyMedium },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',

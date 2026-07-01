@@ -1,6 +1,11 @@
 // Resolution Fitness App — Settings Screen
-// User preferences: units, notifications, rest timer,
-// weekly goals, calorie/protein/water targets, theme, AI model, OpenAI key.
+// User preferences: units, notifications, rest timer, weekly goals,
+// targets, theme, AI model.
+//
+// The "Theme" row now drives a LOCAL state override through the
+// theme context — the picker flips the UI in real time.
+// We still POST `settings.theme` to the backend so server-side config
+// stays in sync (e.g. for email rendering, default avatar color).
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -8,14 +13,25 @@ import {
   StyleSheet, Alert, ActivityIndicator, Switch,
 } from 'react-native';
 import api from '../api/client';
-import Colors from '../theme/colors';
+import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows } from '../theme/spacing';
 
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+];
+
 export default function SettingsScreen() {
+  const { scheme, override, setOverride, colors } = useTheme();
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Must be defined BEFORE the loading early-return — the loading view
+  // references styles.loadingContainer.
+  const styles = useThemedStyles(makeStyles);
 
   useEffect(() => {
     fetchSettings();
@@ -48,7 +64,7 @@ export default function SettingsScreen() {
         calorieTarget: settings.calorieTarget,
         proteinTargetGrams: settings.proteinTargetGrams,
         waterGoalMl: settings.waterGoalMl,
-        theme: settings.theme,
+        theme: scheme,
         aiModel: settings.aiModel,
       };
       await api.updateSettings(fields);
@@ -62,8 +78,8 @@ export default function SettingsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -71,120 +87,106 @@ export default function SettingsScreen() {
   const s = settings || {};
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* ── Units ───────────────────────────────────────────── */}
-        <View style={[styles.section, Shadows.sm]}>
-          <Text style={styles.sectionTitle}>Units</Text>
-          <View style={styles.row}>
-            <TouchableOpacity
-              style={[styles.option, s.units === 'metric' && styles.optionActive]}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Units ───────────────────────────────────────── */}
+        <Card colors={colors} styles={styles}>
+          <SectionTitle colors={colors} styles={styles}>Units</SectionTitle>
+          <Row>
+            <Option
+              active={s.units === 'metric'}
               onPress={() => updateField('units', 'metric')}
-            >
-              <Text style={[styles.optionText, s.units === 'metric' && styles.optionTextActive]}>
-                Metric (kg, cm)
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.option, s.units === 'imperial' && styles.optionActive]}
+              label="Metric (kg, cm)"
+              colors={colors}
+              styles={styles}
+            />
+            <Option
+              active={s.units === 'imperial'}
               onPress={() => updateField('units', 'imperial')}
-            >
-              <Text style={[styles.optionText, s.units === 'imperial' && styles.optionTextActive]}>
-                Imperial (lb, in)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+              label="Imperial (lb, in)"
+              colors={colors}
+              styles={styles}
+            />
+          </Row>
+        </Card>
 
-        {/* ── Notifications ──────────────────────────────────── */}
-        <View style={[styles.section, Shadows.sm]}>
+        {/* ── Notifications ──────────────────────────────── */}
+        <Card colors={colors} styles={styles}>
           <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.sectionTitle}>Notifications</Text>
-              <Text style={styles.switchSub}>
+            <View style={{ flex: 1, paddingRight: Spacing.md }}>
+              <SectionTitle colors={colors} styles={styles}>Notifications</SectionTitle>
+              <Text style={[styles.switchSub, { color: colors.textMuted }]}>
                 Workout reminders and tips
               </Text>
             </View>
             <Switch
               value={s.notifications !== false}
               onValueChange={(v) => updateField('notifications', v)}
-              trackColor={{ false: Colors.gray300, true: Colors.primaryLight }}
-              thumbColor={s.notifications !== false ? Colors.primary : Colors.gray400}
+              trackColor={{ false: colors.divider, true: colors.accentSoft }}
+              thumbColor={s.notifications !== false ? colors.accent : colors.border}
             />
           </View>
-        </View>
+        </Card>
 
-        {/* ── Rest Timer ─────────────────────────────────────── */}
-        <View style={[styles.section, Shadows.sm]}>
-          <Text style={styles.sectionTitle}>Rest Timer (seconds)</Text>
-          <View style={styles.row}>
+        {/* ── Rest Timer ─────────────────────────────────── */}
+        <Card colors={colors} styles={styles}>
+          <SectionTitle colors={colors} styles={styles}>Rest Timer (seconds)</SectionTitle>
+          <Row>
             {[30, 60, 90, 120, 180].map((val) => (
-              <TouchableOpacity
+              <Option
                 key={val}
-                style={[styles.option, s.restTimerSeconds === val && styles.optionActive]}
+                active={s.restTimerSeconds === val}
                 onPress={() => updateField('restTimerSeconds', val)}
-              >
-                <Text style={[styles.optionText, s.restTimerSeconds === val && styles.optionTextActive]}>
-                  {val}s
-                </Text>
-              </TouchableOpacity>
+                label={`${val}s`}
+                colors={colors}
+                styles={styles}
+              />
             ))}
-          </View>
-        </View>
+          </Row>
+        </Card>
 
-        {/* ── Goals ──────────────────────────────────────────── */}
-        <View style={[styles.section, Shadows.sm]}>
-          <Text style={styles.sectionTitle}>Daily Targets</Text>
+        {/* ── Goals ──────────────────────────────────────── */}
+        <Card colors={colors} styles={styles}>
+          <SectionTitle colors={colors} styles={styles}>Daily Targets</SectionTitle>
+          <GoalRow label="Workouts per week" value={s.weeklyWorkoutGoal || 4} colors={colors} styles={styles} />
+          <GoalRow label="Calories (kcal)" value={s.calorieTarget || 2000} colors={colors} styles={styles} />
+          <GoalRow label="Protein (g)" value={s.proteinTargetGrams || 150} colors={colors} styles={styles} />
+          <GoalRow label="Water (ml)" value={s.waterGoalMl || 2000} colors={colors} styles={styles} />
+        </Card>
 
-          <View style={styles.goalRow}>
-            <Text style={styles.goalLabel}>Workouts per week</Text>
-            <Text style={styles.goalValue}>{s.weeklyWorkoutGoal || 4}</Text>
-          </View>
-
-          <View style={styles.goalRow}>
-            <Text style={styles.goalLabel}>Calories (kcal)</Text>
-            <Text style={styles.goalValue}>{s.calorieTarget || 2000}</Text>
-          </View>
-
-          <View style={styles.goalRow}>
-            <Text style={styles.goalLabel}>Protein (g)</Text>
-            <Text style={styles.goalValue}>{s.proteinTargetGrams || 150}</Text>
-          </View>
-
-          <View style={styles.goalRow}>
-            <Text style={styles.goalLabel}>Water (ml)</Text>
-            <Text style={styles.goalValue}>{s.waterGoalMl || 2000}</Text>
-          </View>
-        </View>
-
-        {/* ── Theme ─────────────────────────────────────────── */}
-        <View style={[styles.section, Shadows.sm]}>
-          <Text style={styles.sectionTitle}>Theme</Text>
-          <View style={styles.row}>
-            {['light', 'dark'].map((theme) => (
-              <TouchableOpacity
-                key={theme}
-                style={[styles.option, s.theme === theme && styles.optionActive]}
-                onPress={() => updateField('theme', theme)}
-              >
-                <Text style={[styles.optionText, s.theme === theme && styles.optionTextActive]}>
-                  {theme.charAt(0).toUpperCase() + theme.slice(1)}
-                </Text>
-              </TouchableOpacity>
+        {/* ── Theme ──────────────────────────────────────── */}
+        <Card colors={colors} styles={styles}>
+          <SectionTitle colors={colors} styles={styles}>Theme</SectionTitle>
+          <Text style={[styles.switchSub, { color: colors.textMuted, marginBottom: Spacing.md }]}>
+            Currently previewing: <Text style={{ fontWeight: '700', color: colors.title }}>{THEME_OPTIONS.find(o => o.value === (override || 'system'))?.label || 'System'} ({scheme})</Text>
+          </Text>
+          <Row>
+            {THEME_OPTIONS.map((opt) => (
+              <Option
+                key={opt.value}
+                active={(override || 'system') === opt.value}
+                onPress={() => setOverride(opt.value)}
+                label={opt.label}
+                colors={colors}
+                styles={styles}
+              />
             ))}
-          </View>
-        </View>
+          </Row>
+        </Card>
 
-        {/* ── Save ───────────────────────────────────────────── */}
+        {/* ── Save ───────────────────────────────────────── */}
         <TouchableOpacity
-          style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+          style={[styles.saveBtn, saving && styles.saveBtnDisabled, { backgroundColor: colors.accent }]}
           onPress={handleSave}
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator color={Colors.white} />
+            <ActivityIndicator color={colors.textInverse} />
           ) : (
-            <Text style={styles.saveBtnText}>Save Settings</Text>
+            <Text style={[styles.saveBtnText, { color: colors.textInverse }]}>Save Settings</Text>
           )}
         </TouchableOpacity>
 
@@ -194,54 +196,113 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.offWhite },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.offWhite },
-  scrollContent: { padding: Spacing.xl },
-  // ── Sections ──────────────────────────────────────────────
-  section: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  sectionTitle: { ...Typography.bodyMedium, color: Colors.black, marginBottom: Spacing.md },
-  row: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
-  option: {
-    flex: 1,
-    minWidth: 100,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.offWhite,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  optionActive: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
-  optionText: { ...Typography.caption, color: Colors.textSecondary },
-  optionTextActive: { color: Colors.primary, fontWeight: '600' },
-  // ── Switch ────────────────────────────────────────────────
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  switchSub: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  // ── Goals ─────────────────────────────────────────────────
-  goalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray100,
-  },
-  goalLabel: { ...Typography.bodySmall, color: Colors.textSecondary },
-  goalValue: { ...Typography.bodyMedium, color: Colors.primary },
-  // ── Save ──────────────────────────────────────────────────
-  saveBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-  },
-  saveBtnDisabled: { backgroundColor: Colors.primaryLight },
-  saveBtnText: { ...Typography.bodyMedium, color: Colors.white, fontWeight: '700' },
-});
+// ── Local sub-components (kept inline to avoid forward-style pain) ──
+
+function Card({ children, colors, styles }) {
+  return (
+    <View
+      style={[
+        styles.section,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        Shadows.sm,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+function SectionTitle({ children, colors, styles }) {
+  return (
+    <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>
+      {children}
+    </Text>
+  );
+}
+
+function Row({ children }) {
+  return <View style={{ flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' }}>{children}</View>;
+}
+
+function Option({ active, onPress, label, colors, styles }) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.option,
+        {
+          backgroundColor: active ? colors.accentBg : colors.surfaceMuted,
+          borderColor: active ? colors.accent : 'transparent',
+        },
+      ]}
+      onPress={onPress}
+    >
+      <Text
+        style={[
+          styles.optionText,
+          {
+            color: active ? colors.accentDeep : colors.textSecondary,
+            fontWeight: active ? '600' : '400',
+          },
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function GoalRow({ label, value, colors, styles }) {
+  return (
+    <View
+      style={[styles.goalRow, { borderBottomColor: colors.divider }]}
+    >
+      <Text style={[styles.goalLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.goalValue, { color: colors.accent }]}>{value}</Text>
+    </View>
+  );
+}
+
+// ── Style factory (driven by theme tokens) ──────────────────────────
+function makeStyles(theme) {
+  const { colors } = theme;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    scrollContent: { padding: Spacing.xl },
+    section: {
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      marginBottom: Spacing.lg,
+      borderWidth: 1,
+    },
+    sectionTitle: { ...Typography.bodyMedium, marginBottom: Spacing.md },
+    option: {
+      flex: 1,
+      minWidth: 100,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.md,
+      alignItems: 'center',
+      borderWidth: 2,
+    },
+    optionText: { ...Typography.caption, textAlign: 'center' },
+    switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    switchSub: { ...Typography.caption, marginTop: 2 },
+    goalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: Spacing.sm,
+      borderBottomWidth: 1,
+    },
+    goalLabel: { ...Typography.bodySmall },
+    goalValue: { ...Typography.bodyMedium, fontWeight: '600' },
+    saveBtn: {
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      marginTop: Spacing.lg,
+    },
+    saveBtnDisabled: { opacity: 0.6 },
+    saveBtnText: { ...Typography.bodyMedium, fontWeight: '700' },
+  });
+}

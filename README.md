@@ -44,13 +44,11 @@ npx expo start
 
 Configure the backend URL in `mobile/src/api/config.js`.
 
-Configure the backend URL in `mobile/src/api/config.js`.
-
 ### Tests
 
 ```bash
 cd Resolution-fitnessapp/backend
-go test ./handlers/ -v
+go test ./... -v
 ```
 
 ---
@@ -110,7 +108,7 @@ go test ./handlers/ -v
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Go 1.22+, `net/http`, SQLite, JWT, bcrypt |
+| **Backend** | Go 1.25+, `net/http`, SQLite (pure-Go), JWT, bcrypt |
 | **Frontend** | React Native, Expo SDK 54, React Navigation v7 |
 | **Auth** | JWT (`golang-jwt/jwt/v5`) with 72h expiry |
 | **Database** | SQLite (WAL mode, foreign keys ON) |
@@ -131,18 +129,21 @@ Resolution-fitnessapp/
 │   ├── middleware/              # JWT auth, CORS, logging
 │   ├── models/                 # Data structures
 │   ├── utils/                  # Response helpers, validation, dates
+│   ├── Makefile                # Build / test / run targets
 │   └── handlers/workouts_test.go  # 16 unit tests
 │
 ├── mobile/                     # React Native (Expo)
-│   ├── App.js
+│   ├── App.js                  # Root entry (splash + theme + auth providers)
 │   └── src/
 │       ├── api/                # HTTP client + config
-│       ├── contexts/           # AuthContext
+│       ├── components/         # Reusable UI (Card, ExerciseLibrary, HeroCard, Logo, etc.)
+│       ├── contexts/           # AuthContext, ThemeContext
 │       ├── navigation/         # Tab + stack navigators
-│       ├── screens/            # 13 screens
-│       ├── theme/              # colors, spacing, typography
-│       └── utils/
+│       ├── screens/            # 13 screens + __tests__
+│       ├── theme/              # colors, typography, spacing, card, themes, outlineText
+│       └── utils/              # dates, usePressScale
 │
+├── scripts/                    # LAN IP update helpers
 └── PROMPT.md                   # Full project overview
 ```
 
@@ -171,4 +172,4 @@ Full API reference in [PROMPT.md](PROMPT.md).
 - **Progression reset on active switch** — XP/level/streak tied to routine consistency
 - **Cascade cleanup** — deleting a plan removes all linked sessions/days/exercises
 - **Consistent API shape** — all responses follow `{ data, message }` or `{ error }`
-- **Theme system** — purple (#7C3AED) accent on monochrome foundation
+- **Theme system** — purple (#7C3AED) accent on monochrome foundation with light/dark mode support

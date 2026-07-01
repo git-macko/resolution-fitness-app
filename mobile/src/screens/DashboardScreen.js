@@ -1,22 +1,36 @@
 // Resolution Fitness App — Dashboard Screen
 // Summary hub showing progression from both Fitness and Health tabs.
-// Includes: daily motivational quote, health facts, XP/progress, streaks,
-// today's summary, weekly activity, next workout, and AI Coach quick access.
+// Includes: motivational quote (in hero card), gym facts, streaks,
+// today's summary, next workout, and AI Coach quick access.
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, Image, ScrollView, TouchableOpacity, Pressable, Animated,
   StyleSheet, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import HeroCard from '../components/HeroCard';
+import HeroStatRow from '../components/HeroStat';
+import Card from '../components/Card';
+import MimiMark from '../components/MimiMark';
+import TodaysSummary from '../components/TodaysSummary';
+import Logo from '../components/Logo';
 import Colors from '../theme/colors';
 import Typography from '../theme/typography';
-import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
+import { Spacing, BorderRadius, Layout } from '../theme/spacing';
+import usePressScale from '../utils/usePressScale';
+
+const QA_CARD_WIDTH = 170;
+const QA_CARD_GAP = 12;
+const QA_SNAP_INTERVAL = QA_CARD_WIDTH + QA_CARD_GAP;
+
+const UNS = 'https://images.unsplash.com/photo-';
 
 export default function DashboardScreen({ navigation }) {
   const { user } = useAuth();
+  const mimiPress = usePressScale(0.92);
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -59,6 +73,14 @@ export default function DashboardScreen({ navigation }) {
     return 'Good evening';
   };
 
+  const QUICK_ACTIONS = useMemo(() => [
+    { id: 'plan', title: 'Plan Workout', sub: 'Create or start your routine', accent: '#EF4444', image: UNS + '1517836357463-d25dfeac3438?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Fitness') },
+    { id: 'meal', title: 'Log Meal', sub: 'Track your nutrition intake', accent: '#22C55E', image: UNS + '1490645935967-10de6ba17061?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health') },
+    { id: 'scan', title: 'Scan Food', sub: 'Snap a photo for nutrition facts', accent: '#3B82F6', image: UNS + '1546069901-ba9599a7e63c?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health', { screen: 'FoodScan' }) },
+    { id: 'water', title: 'Log Water', sub: 'Stay hydrated, track intake', accent: '#14B8A6', image: UNS + '1548839140-29a749e1cf4d?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health') },
+    { id: 'settings', title: 'Settings', sub: 'Customize your experience', accent: '#8B5CF6', image: UNS + '1512941937669-90a1b58e7e9c?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Account', { screen: 'Settings' }) },
+  ], [navigation]);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -70,27 +92,27 @@ export default function DashboardScreen({ navigation }) {
   const ds = dashboard || {};
   const stats = ds.stats || {};
   const quote = ds.quote || { text: 'Strive for progress, not perfection.', author: 'Unknown' };
-  const fact = ds.fact || { text: 'Consistency is the key to fitness success.', category: 'motivation' };
+  const fact = ds.fact || { text: 'Consistency is the key to fitness success.', source: '' };
   const nextWorkout = ds.nextWorkout || null;
 
   return (
     <View style={styles.container}>
       {/* ── Header ───────────────────────────────────────────── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>
-            {greeting()}, {user?.displayName || 'Athlete'}!
-          </Text>
-          <Text style={styles.greetingSub}>
-            {`🔥 ${stats.currentStreak || 0} day streak`}
-          </Text>
+        <View style={styles.brandGroup}>
+          <Logo variant="full" size={48} />
+          <Text style={styles.logoLabel}>Resolution</Text>
         </View>
-        <TouchableOpacity
-          style={styles.aiBtn}
+        <Pressable
           onPress={() => navigation.navigate('Chat')}
+          {...mimiPress.handlers}
+          accessibilityLabel="Ask Mimi"
         >
-          <Text style={styles.aiBtnText}>AI Coach</Text>
-        </TouchableOpacity>
+          <Animated.View style={[styles.mimiButton, mimiPress.animatedStyle]}>
+            <MimiMark size={32} />
+            <Text style={styles.mimiLabel}>Ask Mimi</Text>
+          </Animated.View>
+        </Pressable>
       </View>
 
         {/* ── Error Banner ─────────────────────────────────── */}
@@ -110,76 +132,53 @@ export default function DashboardScreen({ navigation }) {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Progress Card ──────────────────────────────────── */}
-        <View style={[styles.progressCard, Shadows.md]}>
-          <Text style={styles.sectionTitle}>Your Progress</Text>
-          <View style={styles.progressGrid}>
-            <View style={styles.progressItem}>
-              <Text style={styles.progressValue}>{stats.totalWorkouts || 0}</Text>
-              <Text style={styles.progressLabel}>Workouts</Text>
-            </View>
-            <View style={styles.progressDivider} />
-            <View style={styles.progressItem}>
-              <Text style={styles.progressValue}>{stats.totalMinutes || 0}</Text>
-              <Text style={styles.progressLabel}>Minutes</Text>
-            </View>
-            <View style={styles.progressDivider} />
-            <View style={styles.progressItem}>
-              <Text style={styles.progressValue}>{stats.fitnessLevel || 1}</Text>
-              <Text style={styles.progressLabel}>Level</Text>
-            </View>
-          </View>
-          {/* XP Bar */}
-          <View style={styles.xpBar}>
-            <View style={[styles.xpFill, { width: `${Math.min(100, ((stats.fitnessXp || 0) % 1000) / 10)}%` }]} />
-          </View>
-          <Text style={styles.xpText}>
-            {stats.fitnessXp || 0} XP • Level {stats.fitnessLevel || 1}
-          </Text>
-        </View>
+        {/* ── Hero Card ──────────────────────────────────────────── */}
+        <HeroCard
+          topLabel="TODAY"
+          quote={quote.text}
+          quoteAuthor={quote.author}
+          title={`${greeting()}, ${user?.displayName || 'Athlete'}!`}
+          subtitle={`🔥 ${stats.currentStreak || 0} day streak`}
+        >
+          <HeroStatRow
+            stats={[
+              { value: stats.totalWorkouts || 0, label: 'Workouts', tone: 'default' },
+              { value: stats.totalMinutes || 0, label: 'Minutes', tone: 'default' },
+              { value: `Lv.${stats.fitnessLevel || 1}`, label: 'Level', tone: 'warning' },
+            ]}
+          />
+        </HeroCard>
 
-        {/* ── Motivational Quote ─────────────────────────────── */}
-        <View style={[styles.quoteCard, Shadows.sm]}>
-          <Text style={styles.quoteIcon}>"</Text>
-          <Text style={styles.quoteText}>{quote.text}</Text>
-          <Text style={styles.quoteAuthor}>— {quote.author}</Text>
-        </View>
+        {/* ── Today's Summary ──────────────────────────────────
+            Position of the Cal Burned + Water cards lives in
+            `components/TodaysSummary.js`. Edit that file to retune
+            the row layout, gap, or inner alignment. Add more metrics
+            by pushing another entry into the `metrics` array below. */}
+        <TodaysSummary
+          metrics={[
+            { value: ds.caloriesBurned || 0, label: 'Cal Burned', sub: 'kcal today' },
+            { value: `${ds.waterMl || 0}ml`, label: 'Water', sub: `of ${ds.waterGoal || 2000}ml` },
+          ]}
+        />
 
-        {/* ── Today's Summary ────────────────────────────────── */}
-        <View style={styles.row}>
-          <View style={[styles.halfCard, Shadows.sm]}>
-            <Text style={styles.miniCardValue}>
-              {ds.caloriesBurned || 0}
-            </Text>
-            <Text style={styles.miniCardLabel}>Cal Burned</Text>
-            <Text style={styles.miniCardSub}>kcal today</Text>
-          </View>
-          <View style={[styles.halfCard, Shadows.sm]}>
-            <Text style={styles.miniCardValue}>
-              {ds.waterMl || 0}ml
-            </Text>
-            <Text style={styles.miniCardLabel}>Water</Text>
-            <Text style={styles.miniCardSub}>
-              of {ds.waterGoal || 2000}ml
-            </Text>
-          </View>
-        </View>
-
-        {/* ── Health Fact ────────────────────────────────────── */}
-        <View style={[styles.factCard, Shadows.sm]}>
+        {/* ── Gym Facts ────────────────────────────────────── */}
+        <Card style={styles.marginBottom} contentStyle={styles.factCard}>
           <View style={styles.factHeader}>
             <Text style={styles.factIcon}>🧠</Text>
-            <Text style={styles.factCategory}>{fact.category || 'Health'}</Text>
+            <Text style={styles.factCategory}>Gym Facts</Text>
           </View>
           <Text style={styles.factText}>{fact.text}</Text>
           {fact.source ? (
             <Text style={styles.factSource}>Source: {fact.source}</Text>
           ) : null}
-        </View>
+        </Card>
 
         {/* ── Next Workout ───────────────────────────────────── */}
         {nextWorkout && (
-          <View style={[styles.nextWorkoutCard, Shadows.sm]}>
+          <Card
+            style={styles.marginBottom}
+            contentStyle={styles.nextWorkoutCard}
+          >
             <Text style={styles.sectionTitle}>Next Workout</Text>
             <Text style={styles.workoutName}>{nextWorkout.workoutName}</Text>
             <Text style={styles.workoutMeta}>
@@ -196,38 +195,55 @@ export default function DashboardScreen({ navigation }) {
             >
               <Text style={styles.startBtnText}>Start Workout →</Text>
             </TouchableOpacity>
-          </View>
+          </Card>
         )}
 
-        {/* ── Quick Actions ──────────────────────────────────── */}
+        {/* ── Quick Actions Carousel ───────────────────────────── */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.quickBtn}
-            onPress={() => navigation.navigate('Fitness')}
-          >
-            <Text style={styles.quickBtnIcon}>💪</Text>
-            <Text style={styles.quickBtnLabel}>Plan Workout</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickBtn}
-            onPress={() => navigation.navigate('Health')}
-          >
-            <Text style={styles.quickBtnIcon}>🥗</Text>
-            <Text style={styles.quickBtnLabel}>Log Meal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickBtn}
-            onPress={() => navigation.navigate('Chat')}
-          >
-            <Text style={styles.quickBtnIcon}>🤖</Text>
-            <Text style={styles.quickBtnLabel}>Ask Coach</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={QA_SNAP_INTERVAL}
+          decelerationRate="fast"
+          contentContainerStyle={styles.qaCarouselContent}
+        >
+          {QUICK_ACTIONS.map((action) => (
+            <Card key={action.id} style={styles.qaCard} contentStyle={styles.qaCardInner} onPress={action.onPress}>
+              <QACardImage image={action.image} accent={action.accent} />
+              <View style={[styles.qaAccentBar, { backgroundColor: action.accent }]} />
+              <View style={styles.qaPillRow}>
+                <View style={[styles.qaPill, { backgroundColor: action.accent + '18' }]}>
+                  <Text style={[styles.qaPillText, { color: action.accent }]}>
+                    {action.title.split(' ')[0]}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.qaTitle} numberOfLines={2}>{action.title}</Text>
+              <Text style={styles.qaSub} numberOfLines={2}>{action.sub}</Text>
+            </Card>
+          ))}
+        </ScrollView>
 
         <View style={{ height: Spacing['4xl'] }} />
       </ScrollView>
+
+
     </View>
+  );
+}
+
+function QACardImage({ image, accent }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !image) {
+    return (
+      <View style={[styles.qaImage, { backgroundColor: accent + '18' }]}>
+        <Text style={styles.qaPlaceholderIcon}>✨</Text>
+      </View>
+    );
+  }
+  return (
+    <Image source={{ uri: image }} style={styles.qaImage} resizeMode="cover" onError={() => setFailed(true)} />
   );
 }
 
@@ -263,145 +279,55 @@ const styles = StyleSheet.create({
   },
   // ── Header ─────────────────────────────────────────────────
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: Spacing.xl,
     paddingTop: Layout.screenTopPadding,
     paddingBottom: Spacing.lg,
     backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  greeting: {
-    ...Typography.h3,
-    color: Colors.black,
+  brandGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
-  greetingSub: {
-    ...Typography.bodySmall,
-    color: Colors.primary,
+  logoLabel: {
+    ...Typography.h4,
+    color: Colors.gray600,
+    letterSpacing: 0.5,
   },
-  aiBtn: {
-    backgroundColor: Colors.primaryBg,
-    paddingHorizontal: Spacing.lg,
+  mimiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+    borderColor: Colors.primary,
   },
-  aiBtnText: {
-    ...Typography.captionMedium,
-    color: Colors.primary,
+  mimiLabel: {
+    ...Typography.bodySmall,
+    color: Colors.gray500,
+    
+    fontWeight: '600',
   },
   // ── Scroll ─────────────────────────────────────────────────
   scrollContent: {
     padding: Spacing.xl,
-  },
-  // ── Progress Card ─────────────────────────────────────────
-  progressCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
   },
   sectionTitle: {
     ...Typography.bodyMedium,
     color: Colors.black,
     marginBottom: Spacing.md,
   },
-  progressGrid: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  progressValue: {
-    ...Typography.stat,
-    color: Colors.primary,
-  },
-  progressLabel: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  progressDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: Colors.gray200,
-  },
-  xpBar: {
-    height: 6,
-    backgroundColor: Colors.gray200,
-    borderRadius: 3,
-    marginTop: Spacing.lg,
-    overflow: 'hidden',
-  },
-  xpFill: {
-    height: 6,
-    backgroundColor: Colors.primary,
-    borderRadius: 3,
-  },
-  xpText: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: Spacing.sm,
-  },
-  // ── Quote Card ─────────────────────────────────────────────
-  quoteCard: {
-    backgroundColor: Colors.primaryBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
+  marginBottom: {
     marginBottom: Spacing.lg,
-  },
-  quoteIcon: {
-    ...Typography.h1,
-    color: Colors.primaryLight,
-    marginBottom: Spacing.sm,
-  },
-  quoteText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    fontStyle: 'italic',
-    marginBottom: Spacing.sm,
-  },
-  quoteAuthor: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    textAlign: 'right',
-  },
-  // ── Summary Row ────────────────────────────────────────────
-  row: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  halfCard: {
-    flex: 1,
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-  },
-  miniCardValue: {
-    ...Typography.statSmall,
-    color: Colors.black,
-  },
-  miniCardLabel: {
-    ...Typography.captionMedium,
-    color: Colors.textPrimary,
-    marginTop: 2,
-  },
-  miniCardSub: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    marginTop: 2,
   },
   // ── Fact Card ──────────────────────────────────────────────
   factCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
   },
   factHeader: {
     flexDirection: 'row',
@@ -428,12 +354,7 @@ const styles = StyleSheet.create({
   },
   // ── Next Workout ───────────────────────────────────────────
   nextWorkoutCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
     padding: Spacing.xl,
-    marginBottom: Spacing.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
   },
   workoutName: {
     ...Typography.h4,
@@ -456,25 +377,62 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '700',
   },
-  // ── Quick Actions ─────────────────────────────────────────
-  quickActions: {
-    flexDirection: 'row',
-    gap: Spacing.md,
+  // ── Quick Actions Carousel ─────────────────────────────────
+  qaCarouselContent: {
+    paddingBottom: Spacing.sm,
   },
-  quickBtn: {
+  qaCard: {
+    width: QA_CARD_WIDTH,
+    height: 236,
+    marginRight: QA_CARD_GAP,
+    marginBottom: Spacing.lg,
+  },
+  qaCardInner: {
+    padding: 0,
+    overflow: 'hidden',
     flex: 1,
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
+  },
+  qaImage: {
+    width: '100%',
+    height: 88,
+    backgroundColor: Colors.gray100,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  quickBtnIcon: {
-    fontSize: 28,
-    marginBottom: Spacing.sm,
+  qaPlaceholderIcon: {
+    fontSize: 36,
   },
-  quickBtnLabel: {
+  qaAccentBar: {
+    height: 4,
+    width: '100%',
+  },
+  qaPillRow: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  qaPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  qaPillText: {
+    ...Typography.caption,
+    fontWeight: '600',
+  },
+  qaTitle: {
     ...Typography.captionMedium,
     color: Colors.textPrimary,
-    textAlign: 'center',
+    fontWeight: '700',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    minHeight: 44,
+  },
+  qaSub: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.lg,
   },
 });

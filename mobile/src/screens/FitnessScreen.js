@@ -4,15 +4,21 @@
 
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
   StyleSheet, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../api/client';
+import HeroCard from '../components/HeroCard';
+import HeroStatRow from '../components/HeroStat';
+import Card from '../components/Card';
+import ExerciseLibrary from '../components/ExerciseLibrary';
+import MimiMark from '../components/MimiMark';
 import Colors from '../theme/colors';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
 import { getThisWeekMonday, formatWeekLabel } from '../utils/dates';
+import usePressScale from '../utils/usePressScale';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_LABELS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -25,7 +31,9 @@ export default function FitnessScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [showPlanActions, setShowPlanActions] = useState(false);
-  const [stats, setStats] = useState(null); // user workout stats for progression summary
+  const mimiPress = usePressScale(0.96);
+
+  const [stats, setStats] = useState(null); // user workout stats for hero card
   const [fetchError, setFetchError] = useState(null);
 
   // Effective plan for this week (one-time override takes precedence over consistent)
@@ -33,8 +41,6 @@ export default function FitnessScreen({ navigation }) {
   const effectiveWeekPlan = resolveEffectivePlan(plans, thisWeekMonday);
   const consistentPlans = plans.filter(p => p.routineType !== 'one_time');
   const oneTimePlans = plans.filter(p => p.routineType === 'one_time');
-
-  const MUSCLE_GROUPS = ['all', 'chest', 'back', 'legs', 'shoulders', 'arms', 'core', 'cardio'];
 
   // ── Resolve the effective plan for a given week ─────────────────
   // One-time overrides take precedence over consistent routines.
@@ -109,10 +115,6 @@ export default function FitnessScreen({ navigation }) {
     fetchData(true);
   };
 
-  const filteredExercises = selectedGroup === 'all'
-    ? exercises
-    : exercises.filter((ex) => ex.muscleGroup === selectedGroup);
-
   const currentPlan = effectiveWeekPlan;
 
   // Build the week header string
@@ -177,35 +179,42 @@ export default function FitnessScreen({ navigation }) {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Progression Summary ──────────────────────────────── */}
-        {stats && (
-          <View style={[styles.progressionCard, Shadows.sm]}>
-            <Text style={styles.progressionTitle}>📊 Your Progression</Text>
-            <View style={styles.progressionRow}>
-              <View style={styles.progressionStat}>
-                <Text style={styles.progressionValue}>{stats.totalWorkouts}</Text>
-                <Text style={styles.progressionLabel}>Workouts</Text>
-              </View>
-              <View style={styles.progressionStat}>
-                <Text style={styles.progressionValue}>{stats.currentStreak}🔥</Text>
-                <Text style={styles.progressionLabel}>Streak</Text>
-              </View>
-              <View style={styles.progressionStat}>
-                <Text style={styles.progressionValue}>{Math.round(stats.totalVolume || 0)}kg</Text>
-                <Text style={styles.progressionLabel}>Volume</Text>
-              </View>
-              <View style={styles.progressionStat}>
-                <Text style={styles.progressionValue}>Lv.{stats.fitnessLevel}</Text>
-                <Text style={styles.progressionLabel}>Level</Text>
-              </View>
+        {/* ── Hero Card ───────────────────────────────────────── */}
+        <HeroCard
+          topLabel="FITNESS"
+          title={currentPlan ? currentPlan.name : 'Your Fitness Journey'}
+          subtitle={currentPlan ? `${currentPlan.days?.length || 0} workout days this week` : weekHeader}
+        >
+          {stats ? (
+            <HeroStatRow
+              stats={[
+                { value: stats.totalWorkouts || 0, label: 'Workouts', tone: 'default' },
+                { value: `${stats.currentStreak || 0}🔥`, label: 'Streak', tone: 'primary' },
+                { value: `${Math.round(stats.totalVolume || 0)}kg`, label: 'Volume', tone: 'default' },
+                { value: `Lv.${stats.fitnessLevel || 1}`, label: 'Level', tone: 'warning' },
+              ]}
+            />
+          ) : null}
+        </HeroCard>
+
+        {/* ── Ask Mimi ───────────────────────────────────────── */}
+        {/* Outlined card: no fill, 2px primary border. Inner text/icon */}
+        {/* pick up the primary color so the row stays cohesive without */}
+        {/* washing out against the off-white page background. */}
+        <Pressable
+          onPress={() => navigation.navigate('Chat')}
+          {...mimiPress.handlers}
+          accessibilityLabel="Ask Mimi, AI Coach"
+        >
+          <Animated.View style={[styles.mimiCard, mimiPress.animatedStyle]}>
+            <MimiMark size={48} color={Colors.white} background={Colors.primaryLight || Colors.primary} />
+            <View style={styles.mimiTextWrap}>
+              <Text style={styles.mimiCardTitle}>Ask Mimi</Text>
+              <Text style={styles.mimiCardSub}>Your AI fitness coach — get tips, plans & answers</Text>
             </View>
-            {/* XP bar */}
-            <View style={styles.xpBarBg}>
-              <View style={[styles.xpBarFill, { width: `${(stats.fitnessXp || 0) % 100}%` }]} />
-            </View>
-            <Text style={styles.xpText}>{stats.fitnessXp % 100} / 100 XP to next level</Text>
-          </View>
-        )}
+            <Text style={styles.mimiCardArrow}>→</Text>
+          </Animated.View>
+        </Pressable>
 
         {/* ── Existing Plans ───────────────────────────────────── */}
         {plans.length > 0 && (
@@ -215,46 +224,16 @@ export default function FitnessScreen({ navigation }) {
             </Text>
             {/* Consistent routines */}
             {consistentPlans.map((plan) => (
-              <View key={plan.id} style={[styles.planCard, Shadows.sm]}>
+              <Card key={plan.id} style={styles.marginBottom} contentStyle={styles.planCard}>
                 <TouchableOpacity
                   style={styles.planCardMain}
                   onPress={() => setShowPlanActions(showPlanActions === plan.id ? null : plan.id)}
                 >
                   <View style={styles.planCardLeft}>
-                    <View style={styles.planNameRow}>
-                      <Text style={styles.planName}>{plan.name}</Text>
-                      {plan.mode ? (
-                        <View style={[
-                          styles.modeBadge,
-                          plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulking,
-                          plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaning,
-                        ]}>
-                          <Text style={[
-                            styles.modeBadgeText,
-                            plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulkingText,
-                            plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaningText,
-                          ]}>
-                            {plan.mode}
-                          </Text>
-                        </View>
-                      ) : null}
-                      <View style={styles.routineTypeBadge}>
-                        <Text style={styles.routineTypeBadgeText}>🔄 Recurring</Text>
-                      </View>
-                      {plan.isActive && (
-                        <View style={styles.activeBadge}>
-                          <Text style={styles.activeBadgeText}>Active</Text>
-                        </View>
-                      )}
-                    </View>
+                    <Text style={styles.planName}>{plan.name}</Text>
                     <Text style={styles.planMeta}>
                       {plan.days?.length || plan.planDays?.length || 0} days
                     </Text>
-                    {plan.modeGoal ? (
-                      <Text style={styles.planGoal} numberOfLines={2}>
-                        {plan.modeGoal}
-                      </Text>
-                    ) : null}
                   </View>
                   <Text style={styles.planExpand}>
                     {showPlanActions === plan.id ? '▲' : '▼'}
@@ -263,6 +242,40 @@ export default function FitnessScreen({ navigation }) {
 
                 {showPlanActions === plan.id && (
                   <View style={styles.planActions}>
+                    {/* Plan metadata tags */}
+                    <View style={styles.planMetadataSection}>
+                      <View style={styles.planNameRow}>
+                        {plan.mode ? (
+                          <View style={[
+                            styles.modeBadge,
+                            plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulking,
+                            plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaning,
+                          ]}>
+                            <Text style={[
+                              styles.modeBadgeText,
+                              plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulkingText,
+                              plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaningText,
+                            ]}>
+                              {plan.mode}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.routineTypeBadge}>
+                          <Text style={styles.routineTypeBadgeText}>🔄 Recurring</Text>
+                        </View>
+                        {plan.isActive && (
+                          <View style={styles.activeBadge}>
+                            <Text style={styles.activeBadgeText}>Active</Text>
+                          </View>
+                        )}
+                      </View>
+                      {plan.modeGoal ? (
+                        <Text style={styles.planGoalExpanded} numberOfLines={3}>
+                          {plan.modeGoal}
+                        </Text>
+                      ) : null}
+                    </View>
+
                     {/* Workout days inside the expanded card — tappable to start session */}
                     <View style={styles.planDaysList}>
                       <Text style={styles.planDaysListTitle}>Workout Days</Text>
@@ -392,10 +405,10 @@ export default function FitnessScreen({ navigation }) {
                       >
                         <Text style={styles.planActionDeleteText}>✕ Delete</Text>
                       </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                )}
-              </View>
+                  )}
+              </Card>
             ))}
 
             {/* One-time overrides */}
@@ -405,33 +418,13 @@ export default function FitnessScreen({ navigation }) {
                   Upcoming Overrides ({oneTimePlans.length}/3)
                 </Text>
                 {oneTimePlans.map((plan) => (
-                  <View key={plan.id} style={[styles.planCard, Shadows.sm]}>
+                  <Card key={plan.id} style={styles.marginBottom} contentStyle={styles.planCard}>
                     <TouchableOpacity
                       style={styles.planCardMain}
                       onPress={() => setShowPlanActions(showPlanActions === plan.id ? null : plan.id)}
                     >
                       <View style={styles.planCardLeft}>
-                        <View style={styles.planNameRow}>
-                          <Text style={styles.planName}>{plan.name}</Text>
-                          {plan.mode ? (
-                            <View style={[
-                              styles.modeBadge,
-                              plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulking,
-                              plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaning,
-                            ]}>
-                              <Text style={[
-                                styles.modeBadgeText,
-                                plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulkingText,
-                                plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaningText,
-                              ]}>
-                                {plan.mode}
-                              </Text>
-                            </View>
-                          ) : null}
-                          <View style={styles.oneTimeBadge}>
-                            <Text style={styles.oneTimeBadgeText}>📅 Override</Text>
-                          </View>
-                        </View>
+                        <Text style={styles.planName}>{plan.name}</Text>
                         <Text style={styles.planMeta}>
                           {plan.weekStartDate
                             ? formatWeekLabel(plan.weekStartDate)
@@ -439,11 +432,6 @@ export default function FitnessScreen({ navigation }) {
                           {' • '}
                           {plan.days?.length || plan.planDays?.length || 0} days
                         </Text>
-                        {plan.modeGoal ? (
-                          <Text style={styles.planGoal} numberOfLines={2}>
-                            {plan.modeGoal}
-                          </Text>
-                        ) : null}
                       </View>
                       <Text style={styles.planExpand}>
                         {showPlanActions === plan.id ? '▲' : '▼'}
@@ -452,6 +440,35 @@ export default function FitnessScreen({ navigation }) {
 
                     {showPlanActions === plan.id && (
                       <View style={styles.planActions}>
+                        {/* Plan metadata tags */}
+                        <View style={styles.planMetadataSection}>
+                          <View style={styles.planNameRow}>
+                            {plan.mode ? (
+                              <View style={[
+                                styles.modeBadge,
+                                plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulking,
+                                plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaning,
+                              ]}>
+                                <Text style={[
+                                  styles.modeBadgeText,
+                                  plan.mode.toLowerCase() === 'bulking' && styles.modeBadgeBulkingText,
+                                  plan.mode.toLowerCase() === 'leaning' && styles.modeBadgeLeaningText,
+                                ]}>
+                                  {plan.mode}
+                                </Text>
+                              </View>
+                            ) : null}
+                            <View style={styles.oneTimeBadge}>
+                              <Text style={styles.oneTimeBadgeText}>📅 Override</Text>
+                            </View>
+                          </View>
+                          {plan.modeGoal ? (
+                            <Text style={styles.planGoalExpanded} numberOfLines={3}>
+                              {plan.modeGoal}
+                            </Text>
+                          ) : null}
+                        </View>
+
                         {/* Workout days inside the expanded card — tappable to start session */}
                         <View style={styles.planDaysList}>
                           <Text style={styles.planDaysListTitle}>Workout Days</Text>
@@ -538,7 +555,7 @@ export default function FitnessScreen({ navigation }) {
                         </View>
                       </View>
                     )}
-                  </View>
+                  </Card>
                 ))}
               </>
             )}
@@ -554,69 +571,41 @@ export default function FitnessScreen({ navigation }) {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateRow}>
                 {templates.map((tmpl, idx) => (
-                  <TouchableOpacity
+                  <Card
                     key={idx}
-                    style={[styles.templateMiniCard, Shadows.sm]}
+                    backgroundColor={Colors.white}
+                    style={styles.marginBottomSm}
+                    contentStyle={styles.templateMiniCard}
                     onPress={() => navigation.navigate('CreatePlan', { template: tmpl })}
                   >
                     <Text style={styles.templateMiniName}>{tmpl.name}</Text>
                     <Text style={styles.templateMiniDays}>
                       {tmpl.days?.length || 0} days
                     </Text>
-                  </TouchableOpacity>
+                  </Card>
                 ))}
               </View>
             </ScrollView>
           </>
         )}
 
-        {/* ── Exercise Library ───────────────────────────────── */}
+        {/* ── Exercise Library ─────────────────────────────────
+            Position of the filter strip + 2-column grid + empty
+            state lives in `components/ExerciseLibrary.js`. Caller
+            wires the filter state (`selectedGroup`/`onSelectGroup`)
+            and the navigation (`onPressExercise`). */}
         <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
           Exercise Library
         </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-          {MUSCLE_GROUPS.map((group) => (
-            <TouchableOpacity
-              key={group}
-              style={[
-                styles.filterChip,
-                selectedGroup === group && styles.filterChipActive,
-              ]}
-              onPress={() => setSelectedGroup(group)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedGroup === group && styles.filterChipTextActive,
-                ]}
-              >
-                {group.charAt(0).toUpperCase() + group.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        <View style={styles.exerciseGrid}>
-          {filteredExercises.slice(0, 12).map((ex, idx) => (
-            <TouchableOpacity
-              key={ex.id || idx}
-              style={[styles.exerciseCard, Shadows.sm]}
-              onPress={() => navigation.navigate('ExerciseDetail', {
-                exerciseId: ex.id,
-                exerciseName: ex.name,
-              })}
-            >
-              <Text style={styles.exName}>{ex.name}</Text>
-              <Text style={styles.exMeta}>
-                {ex.muscleGroup} • {ex.equipment}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {filteredExercises.length === 0 && (
-          <Text style={styles.emptyText}>No exercises found for this group.</Text>
-        )}
+        <ExerciseLibrary
+          exercises={exercises}
+          selectedGroup={selectedGroup}
+          onSelectGroup={setSelectedGroup}
+          onPressExercise={(ex) => navigation.navigate('ExerciseDetail', {
+            exerciseId: ex.id,
+            exerciseName: ex.name,
+          })}
+        />
 
         <View style={{ height: Spacing['4xl'] }} />
       </ScrollView>
@@ -686,41 +675,15 @@ const styles = StyleSheet.create({
   // ── Scroll ─────────────────────────────────────────────────
   scrollContent: { padding: Spacing.xl },
   sectionTitle: { ...Typography.bodyMedium, color: Colors.black, marginBottom: Spacing.md },
-  // ── Filters ────────────────────────────────────────────────
-  filterRow: { marginBottom: Spacing.md },
-  filterChip: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.cardBg,
-    marginRight: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
+  marginBottom: {
+    marginBottom: Spacing.lg,
   },
-  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  filterChipText: { ...Typography.caption, color: Colors.textSecondary },
-  filterChipTextActive: { color: Colors.white, fontWeight: '600' },
-  // ── Exercise Grid ─────────────────────────────────────────
-  exerciseGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
+  marginBottomSm: {
+    marginBottom: Spacing.sm,
   },
-  exerciseCard: {
-    width: '48%',
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-  },
-  exName: { ...Typography.captionMedium, color: Colors.textPrimary },
-  exMeta: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  emptyText: { ...Typography.bodySmall, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.xl },
   // ── Existing Plans ────────────────────────────────────────
   existingPlansSection: { marginTop: Spacing.lg },
   planCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
     overflow: 'hidden',
   },
   planCardMain: {
@@ -736,6 +699,13 @@ const styles = StyleSheet.create({
   planActions: {
     borderTopWidth: 1,
     borderTopColor: Colors.gray200,
+  },
+  // ── Plan metadata section inside expanded card ────────────
+  planMetadataSection: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
   // ── Workout days list inside expanded plan card ────────────
   planDaysList: {
@@ -810,41 +780,28 @@ const styles = StyleSheet.create({
   // ── Templates Mini ─────────────────────────────────────────
   templateRow: { flexDirection: 'row', gap: Spacing.sm },
   templateMiniCard: {
-    backgroundColor: Colors.primaryBg,
-    borderRadius: BorderRadius.md,
     padding: Spacing.lg,
     width: 140,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.primaryLight,
   },
   templateMiniName: { ...Typography.captionMedium, color: Colors.primary, textAlign: 'center', fontWeight: '700' },
   templateMiniDays: { ...Typography.caption, color: Colors.textSecondary, marginTop: 4 },
-  // ── Progression Summary ──────────────────────────────────────
-  progressionCard: {
-    backgroundColor: Colors.cardBg,
+  // ── Ask Mimi Card ────────────────────────────────────────────
+  // Outlined variant — transparent fill with a 2px primary border.
+  mimiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
     borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+    borderColor: Colors.primary,
     padding: Spacing.xl,
-    marginTop: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
-  progressionTitle: { ...Typography.bodyMedium, color: Colors.black, fontWeight: '700', marginBottom: Spacing.md },
-  progressionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
-  progressionStat: { alignItems: 'center', flex: 1 },
-  progressionValue: { ...Typography.statSmall, color: Colors.black, fontWeight: '800' },
-  progressionLabel: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  xpBarBg: {
-    height: 6,
-    backgroundColor: Colors.gray200,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: Spacing.xs,
-  },
-  xpBarFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 3,
-  },
-  xpText: { ...Typography.caption, color: Colors.textMuted, textAlign: 'center' },
+  mimiTextWrap: { flex: 1, marginHorizontal: Spacing.md },
+  mimiCardTitle: { ...Typography.h4, color: Colors.primary, fontWeight: '700' },
+  mimiCardSub: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
+  mimiCardArrow: { fontSize: 24, color: Colors.primary, fontWeight: '700' },
   // ── Mode Badge ───────────────────────────────────────────────
   planNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   modeBadge: {
@@ -858,8 +815,7 @@ const styles = StyleSheet.create({
   modeBadgeText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600', textTransform: 'capitalize' },
   modeBadgeBulkingText: { color: '#1565C0' },
   modeBadgeLeaningText: { color: '#E65100' },
-  planGoal: { ...Typography.caption, color: Colors.textMuted, marginTop: 4, lineHeight: 16 },
-  // ── Routine Type Badges ──────────────────────────────────────
+  planGoalExpanded: { ...Typography.caption, color: Colors.textSecondary, marginTop: Spacing.xs, lineHeight: 18 },
   routineTypeBadge: {
     backgroundColor: '#E8F5E9',
     paddingHorizontal: Spacing.sm,

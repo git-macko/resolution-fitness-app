@@ -1,5 +1,6 @@
 // Resolution Fitness App — Register Screen
 // Registration form with email/password + navigation to onboarding.
+// Theme-aware.
 
 import React, { useState } from 'react';
 import {
@@ -8,12 +9,15 @@ import {
   ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import Colors from '../theme/colors';
+import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius } from '../theme/spacing';
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -35,8 +39,7 @@ export default function RegisterScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const data = await register(email.trim().toLowerCase(), password);
-      // Navigate to onboarding after successful registration
+      await register(email.trim().toLowerCase(), password);
       navigation.reset({
         index: 0,
         routes: [{ name: 'Onboarding' }],
@@ -75,7 +78,7 @@ export default function RegisterScreen({ navigation }) {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@example.com"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -89,7 +92,7 @@ export default function RegisterScreen({ navigation }) {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Min. 8 characters"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 secureTextEntry
               />
             </View>
@@ -101,7 +104,7 @@ export default function RegisterScreen({ navigation }) {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Re-enter your password"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 secureTextEntry
               />
             </View>
@@ -112,7 +115,7 @@ export default function RegisterScreen({ navigation }) {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color={Colors.white} />
+                <ActivityIndicator color={colors.textInverse} />
               ) : (
                 <Text style={styles.buttonText}>Create Account</Text>
               )}
@@ -135,78 +138,81 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.white,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing['2xl'],
-    paddingVertical: Spacing['4xl'],
-  },
-  header: {
-    marginBottom: Spacing['3xl'],
-  },
-  headerTitle: {
-    ...Typography.h1,
-    color: Colors.black,
-    marginBottom: Spacing.xs,
-  },
-  headerSubtitle: {
-    ...Typography.bodySmall,
-    color: Colors.textSecondary,
-  },
-  formSection: {
-    marginBottom: Spacing['3xl'],
-  },
-  inputGroup: {
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    ...Typography.captionMedium,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
-  },
-  input: {
-    ...Typography.body,
-    backgroundColor: Colors.offWhite,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md + 2,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    color: Colors.textPrimary,
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.lg,
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-  },
-  buttonDisabled: {
-    backgroundColor: Colors.primaryLight,
-  },
-  buttonText: {
-    ...Typography.bodyMedium,
-    color: Colors.white,
-    fontWeight: '700',
-  },
-  footerLink: {
-    alignItems: 'center',
-  },
-  footerText: {
-    ...Typography.bodySmall,
-    color: Colors.textSecondary,
-  },
-  footerLinkText: {
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-});
+function makeStyles(theme) {
+  const { colors } = theme;
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
+    },
+    content: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingHorizontal: Spacing['2xl'],
+      paddingVertical: Spacing['4xl'],
+    },
+    header: {
+      marginBottom: Spacing['3xl'],
+    },
+    headerTitle: {
+      ...Typography.h1,
+      color: colors.title,
+      marginBottom: Spacing.xs,
+    },
+    headerSubtitle: {
+      ...Typography.bodySmall,
+      color: colors.textSecondary,
+    },
+    formSection: {
+      marginBottom: Spacing['3xl'],
+    },
+    inputGroup: {
+      marginBottom: Spacing.lg,
+    },
+    label: {
+      ...Typography.captionMedium,
+      color: colors.textSecondary,
+      marginBottom: Spacing.sm,
+    },
+    input: {
+      ...Typography.body,
+      backgroundColor: colors.surfaceMuted,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md + 2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.textPrimary,
+    },
+    button: {
+      backgroundColor: colors.accent,
+      borderRadius: BorderRadius.md,
+      paddingVertical: Spacing.lg,
+      alignItems: 'center',
+      marginTop: Spacing.lg,
+    },
+    buttonDisabled: {
+      backgroundColor: colors.accentSoft,
+    },
+    buttonText: {
+      ...Typography.bodyMedium,
+      color: colors.textInverse,
+      fontWeight: '700',
+    },
+    footerLink: {
+      alignItems: 'center',
+    },
+    footerText: {
+      ...Typography.bodySmall,
+      color: colors.textSecondary,
+    },
+    footerLinkText: {
+      color: colors.accent,
+      fontWeight: '600',
+    },
+  });
+}
