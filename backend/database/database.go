@@ -9,6 +9,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	sqlite "modernc.org/sqlite"
 )
@@ -98,6 +99,44 @@ func runMigrations() error {
 
 	// ── User Settings table ───────────────────────────────────────
 	// Separate table for app preferences. One-to-one with users.
+	// Note: legacy columns ai_model and openai_api_key_enc may still exist
+	// in older databases. They are no longer referenced by the application
+	// and can be ignored; new databases will not create them.
+	// Migration: add gym preferences columns for existing databases
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_type TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_type column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_name TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_name column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_capacity INTEGER DEFAULT 150"); err != nil {
+		log.Printf("[migrate] gym_capacity column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_address TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_address column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_place_id TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_place_id column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_lat REAL DEFAULT 0"); err != nil {
+		log.Printf("[migrate] gym_lat column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_lng REAL DEFAULT 0"); err != nil {
+		log.Printf("[migrate] gym_lng column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_phone TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_phone column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_website TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_website column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_opening_hours TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_opening_hours column: %v", err)
+	}
+	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_hours_refresh_at TEXT DEFAULT ''"); err != nil {
+		log.Printf("[migrate] gym_hours_refresh_at column: %v", err)
+	}
+
 	if _, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS user_settings (
 			user_id              TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -110,8 +149,17 @@ func runMigrations() error {
 			protein_target_grams INTEGER DEFAULT 150,
 			water_goal_ml        INTEGER DEFAULT 2000,
 			theme                TEXT DEFAULT 'light',
-			ai_model             TEXT DEFAULT 'gpt-4o-mini',
-			openai_api_key_enc   TEXT DEFAULT '',
+			gym_type             TEXT DEFAULT '',
+			gym_name             TEXT DEFAULT '',
+			gym_capacity         INTEGER DEFAULT 150,
+			gym_address          TEXT DEFAULT '',
+			gym_place_id         TEXT DEFAULT '',
+			gym_lat              REAL DEFAULT 0,
+			gym_lng              REAL DEFAULT 0,
+			gym_phone            TEXT DEFAULT '',
+			gym_website          TEXT DEFAULT '',
+			gym_opening_hours    TEXT DEFAULT '',
+			gym_hours_refresh_at TEXT DEFAULT '',
 			created_at           TEXT DEFAULT (datetime('now')),
 			updated_at           TEXT DEFAULT (datetime('now'))
 		);
@@ -285,6 +333,7 @@ func runMigrations() error {
 
 		CREATE INDEX IF NOT EXISTS idx_workout_sessions_user_id ON workout_sessions(user_id);
 		CREATE INDEX IF NOT EXISTS idx_workout_sessions_date ON workout_sessions(date);
+		CREATE INDEX IF NOT EXISTS idx_workout_sessions_user_date ON workout_sessions(user_id, date);
 	`); err != nil {
 		return fmt.Errorf("failed to create workout_sessions table: %w", err)
 	}
@@ -365,15 +414,15 @@ func runMigrations() error {
 		);
 	`); err != nil {
 		return fmt.Errorf("failed to create food_items table: %w", err)
-	}
-
-	// ── Scanned Foods table ───────────────────────────────────────
+	}		// ── Scanned Foods table ───────────────────────────────────────
 	// History of food photo scans with AI analysis results.
 	if _, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS scanned_foods (
 			id               TEXT PRIMARY KEY,
 			user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			photo_url        TEXT NOT NULL DEFAULT '',
+			name             TEXT DEFAULT '',
+			ingredients      TEXT DEFAULT '[]',
 			detected_foods   TEXT DEFAULT '[]',
 			estimated_serving TEXT DEFAULT '',
 			calories         INTEGER DEFAULT 0,
@@ -382,6 +431,7 @@ func runMigrations() error {
 			fat_g            REAL DEFAULT 0,
 			health_score     INTEGER DEFAULT 0,
 			health_facts     TEXT DEFAULT '',
+			food_details     TEXT DEFAULT '[]',
 			allergen_flags   TEXT DEFAULT '[]',
 			was_logged       INTEGER DEFAULT 0,
 			logged_meal_type TEXT DEFAULT '',
@@ -392,6 +442,13 @@ func runMigrations() error {
 	`); err != nil {
 		return fmt.Errorf("failed to create scanned_foods table: %w", err)
 	}
+
+	// Migration: add food_details column for existing databases
+	DB.Exec("ALTER TABLE scanned_foods ADD COLUMN food_details TEXT DEFAULT '[]'")
+
+	// Migration: add name and ingredients columns for existing databases
+	DB.Exec("ALTER TABLE scanned_foods ADD COLUMN name TEXT DEFAULT ''")
+	DB.Exec("ALTER TABLE scanned_foods ADD COLUMN ingredients TEXT DEFAULT '[]'")
 
 	// ── Water Logs table ──────────────────────────────────────────
 	// Track daily water intake — each entry is typically 250ml (one glass).
@@ -498,6 +555,25 @@ func runMigrations() error {
 		return fmt.Errorf("failed to create health_facts table: %w", err)
 	}
 
+	// ── BestTime Cache table ──────────────────────────────────────
+	// Shared cache for gym crowd/busyness data fetched from BestTime.app.
+	// Keyed by venue name + address so multiple users at the same gym share
+	// one cached value and minimize API calls.
+	if _, err := DB.Exec(`
+		CREATE TABLE IF NOT EXISTS besttime_cache (
+			id             TEXT PRIMARY KEY,
+			venue_name     TEXT NOT NULL DEFAULT '',
+			venue_address  TEXT NOT NULL DEFAULT '',
+			percentage     INTEGER DEFAULT 0,
+			updated_at     TEXT DEFAULT (datetime('now')),
+			UNIQUE(venue_name, venue_address)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_besttime_cache_venue ON besttime_cache(venue_name, venue_address);
+	`); err != nil {
+		return fmt.Errorf("failed to create besttime_cache table: %w", err)
+	}
+
 	// ── Chat Messages table ───────────────────────────────────────
 	// Persisted chat history with the AI Coach.
 	if _, err := DB.Exec(`
@@ -512,6 +588,28 @@ func runMigrations() error {
 		CREATE INDEX IF NOT EXISTS idx_chat_messages_user ON chat_messages(user_id, created_at);
 	`); err != nil {
 		return fmt.Errorf("failed to create chat_messages table: %w", err)
+	}
+
+	// ── Gym Crowd Reports table ──────────────────────────────────
+	// Stores user-reported crowd levels for gyms so the app can show
+	// community-powered occupancy estimates alongside BestTime/simulated data.
+	if _, err := DB.Exec(`
+		CREATE TABLE IF NOT EXISTS gym_crowd_reports (
+			id            TEXT PRIMARY KEY,
+			user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			gym_name      TEXT NOT NULL DEFAULT '',
+			gym_address   TEXT NOT NULL DEFAULT '',
+			gym_place_id  TEXT NOT NULL DEFAULT '',
+			gym_lat       REAL DEFAULT 0,
+			gym_lng       REAL DEFAULT 0,
+			level         INTEGER NOT NULL CHECK(level BETWEEN 1 AND 5),
+			created_at    TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_gym_crowd_reports_user_gym ON gym_crowd_reports(user_id, gym_place_id, gym_name, gym_address, created_at);
+		CREATE INDEX IF NOT EXISTS idx_gym_crowd_reports_venue_time ON gym_crowd_reports(gym_place_id, gym_name, gym_address, created_at);
+	`); err != nil {
+		return fmt.Errorf("failed to create gym_crowd_reports table: %w", err)
 	}
 
 	return nil

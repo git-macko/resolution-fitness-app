@@ -150,18 +150,6 @@ jest.mock('../../utils/dates', () => ({
   getWeeksAhead: () => 0,
 }));
 
-jest.mock('../../theme/colors', () => ({
-  __esModule: true,
-  default: {
-    primary: '#FF6B00', primaryLight: '#FF8C33', primaryBg: '#FFF3E0',
-    offWhite: '#FAFAFA', white: '#FFFFFF', black: '#111111',
-    textPrimary: '#111111', textSecondary: '#666666', textMuted: '#999999',
-    textWhite: '#FFFFFF', textInverse: '#FFFFFF', error: '#EF4444',
-    success: '#22C55E', cardBg: '#FFFFFF',
-    gray100: '#F5F5F5', gray200: '#E5E5E5', gray300: '#D4D4D4',
-  },
-}));
-
 jest.mock('../../theme/typography', () => ({
   __esModule: true,
   default: { h1: {}, h3: {}, h4: {}, body: {}, bodyMedium: {}, bodySmall: {}, caption: {}, captionMedium: {}, label: {}, statSmall: {} },
@@ -182,6 +170,56 @@ jest.mock('../../theme/card', () => ({
 
 jest.mock('../../theme/themes', () => ({
   lightTheme: { colors: { surface: '#FFFFFF' } },
+}));
+
+jest.mock('../../contexts/ThemeContext', () => {
+  const React = require('react');
+  const mockColors = {
+    background: '#FFFFFF',
+    surface: '#FFFFFF',
+    surfaceMuted: '#F5F5F5',
+    tabsAndHeader: '#FFFFFF',
+    title: '#B45309',
+    accent: '#EA580C',
+    accentSoft: '#C2410C',
+    accentBg: '#FFEDD5',
+    accentDeep: '#C2410C',
+    textPrimary: '#374151',
+    textSecondary: '#6B7280',
+    textMuted: '#9CA3AF',
+    textInverse: '#FFFFFF',
+    textHeading: '#1F2937',
+    border: '#E5E7EB',
+    divider: '#F3F4F6',
+    success: '#22C55E',
+    warning: '#F59E0B',
+    error: '#EF4444',
+    info: '#3B82F6',
+    tabBarBg: '#FDFDFD',
+    tabBarBorder: '#F4D5B5',
+    tabBarActive: '#C2410C',
+    tabBarInactive: '#A3A3A3',
+    headerBg: '#FFE6CF',
+    headerText: '#1F2937',
+    overlay: 'rgba(0,0,0,0.45)',
+    scrim: 'rgba(0,0,0,0.55)',
+    shadow: 'rgba(0,0,0,0.08)',
+    accentWash: '#FEF3E7',
+  };
+  const mockTheme = { scheme: 'light', colors: mockColors };
+  return {
+    __esModule: true,
+    useTheme: () => ({ scheme: 'light', theme: mockTheme, colors: mockColors, override: 'system', setOverride: jest.fn(), hydrated: true }),
+    useThemedStyles: (factory) => React.useMemo(() => factory(mockTheme), [factory]),
+    ThemeProvider: ({ children }) => React.createElement(React.Fragment, null, children),
+  };
+});
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(() => Promise.resolve(null)),
+  setItem: jest.fn(() => Promise.resolve(null)),
+  removeItem: jest.fn(() => Promise.resolve(null)),
+  clear: jest.fn(() => Promise.resolve(null)),
 }));
 
 // Import after mocks

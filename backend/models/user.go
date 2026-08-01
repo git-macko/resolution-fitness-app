@@ -35,8 +35,14 @@ type UserSettings struct {
 	ProteinTargetGrams int    `json:"proteinTargetGrams"`
 	WaterGoalMl        int    `json:"waterGoalMl"`
 	Theme              string `json:"theme"`
-	AiModel            string `json:"aiModel"`
-	OpenAIKeyEnc       string `json:"-"`
+	GymType            string  `json:"gymType"`
+	GymName            string  `json:"gymName"`
+	GymAddress         string  `json:"gymAddress"`
+	GymPlaceID         string  `json:"gymPlaceId"`
+	GymLat             float64 `json:"gymLat"`
+	GymLng             float64 `json:"gymLng"`
+	GymCapacity        int     `json:"gymCapacity"`
+	GymOpeningHours    string  `json:"gymOpeningHours"`
 	CreatedAt          string `json:"createdAt"`
 	UpdatedAt          string `json:"updatedAt"`
 }
@@ -107,6 +113,7 @@ type UpdateProfileRequest struct {
 }
 
 // UpdateSettingsRequest is the JSON body for PUT /api/profile/settings.
+// Gym preferences are managed through the dedicated /api/profile/gym endpoint.
 type UpdateSettingsRequest struct {
 	Units              string `json:"units,omitempty"`
 	Notifications      *bool  `json:"notifications,omitempty"`
@@ -117,6 +124,4 @@ type UpdateSettingsRequest struct {
 	ProteinTargetGrams *int   `json:"proteinTargetGrams,omitempty"`
 	WaterGoalMl        *int   `json:"waterGoalMl,omitempty"`
 	Theme              string `json:"theme,omitempty"`
-	AiModel            string `json:"aiModel,omitempty"`
-	OpenAIKey          string `json:"openAiKey,omitempty"`
 }

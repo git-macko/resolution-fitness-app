@@ -1,5 +1,6 @@
 // Resolution Fitness App — Create Weekly Plan Screen
 // Multi-step wizard for building a custom weekly workout plan.
+// Theme-aware.
 //
 // Flow:
 //   1. Approach:  Pick a pre-tailored template OR build custom
@@ -16,7 +17,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import api from '../api/client';
-import Colors from '../theme/colors';
+import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
 import { getThisWeekMonday, getWeekMonday, getWeeksAhead, formatWeekLabel } from '../utils/dates';
@@ -34,40 +35,38 @@ const STEPS = ['Approach', 'Days', 'Configure', 'Review'];
 
 // ── Main Component ───────────────────────────────────────────────────
 export default function CreatePlanScreen({ navigation, route }) {
-  // Editing mode: if planId is passed, we're editing an existing plan
   const editPlanId = route.params?.planId || null;
   const isEditing = !!editPlanId;
 
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
   // ── State ──────────────────────────────────────────────────────────
-  const [step, setStep] = useState('approach'); // approach | days | day-config | review
+  const [step, setStep] = useState('approach');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exerciseLibrary, setExerciseLibrary] = useState([]);
   const [templates, setTemplates] = useState([]);
 
-  // Plan count limits
   const [existingPlans, setExistingPlans] = useState({ consistent: 0, oneTime: 0 });
   const MAX_CONSISTENT = 2;
   const MAX_ONE_TIME = 3;
 
-  // Wizard data
-  const [approach, setApproach] = useState('custom'); // 'custom' | 'template'
+  const [approach, setApproach] = useState('custom');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [selectedDays, setSelectedDays] = useState([]);       // [0, 2, 4] = Mon, Wed, Fri
-  const [currentDayIndex, setCurrentDayIndex] = useState(0);   // which selected day we're configuring
-  const [daySubStep, setDaySubStep] = useState('muscles');     // muscles | exercises | config
+  const [selectedDays, setSelectedDays] = useState([]);
+  const [currentDayIndex, setCurrentDayIndex] = useState(0);
+  const [daySubStep, setDaySubStep] = useState('muscles');
   const [currentMuscleIndex, setCurrentMuscleIndex] = useState(0);
   const [planName, setPlanName] = useState('');
-  const [planMode, setPlanMode] = useState(''); // 'bulking' | 'leaning' | 'custom'
-  const [customMode, setCustomMode] = useState(''); // user-typed custom mode name
-  const [modeGoal, setModeGoal] = useState(''); // description of what this mode's goal is
-  const [routineType, setRoutineType] = useState('consistent'); // 'consistent' | 'one_time'
-  const [overrideWeekIndex, setOverrideWeekIndex] = useState(0); // which upcoming week (0=this week, 1=next, ...)
+  const [planMode, setPlanMode] = useState('');
+  const [customMode, setCustomMode] = useState('');
+  const [modeGoal, setModeGoal] = useState('');
+  const [routineType, setRoutineType] = useState('consistent');
+  const [overrideWeekIndex, setOverrideWeekIndex] = useState(0);
 
-  // Day configs: { [dayOfWeek]: { muscles: string[], exercises: [] } }
   const [dayConfigs, setDayConfigs] = useState({});
 
-  // Custom input state
   const [customExerciseName, setCustomExerciseName] = useState('');
   const [customReps, setCustomReps] = useState('');
   const [customSets, setCustomSets] = useState('');
@@ -79,7 +78,6 @@ export default function CreatePlanScreen({ navigation, route }) {
     fetchData();
   }, []);
 
-  // If editing, load existing plan; if a template was passed via navigation, select it
   useEffect(() => {
     if (isEditing) {
       loadExistingPlan();
@@ -98,7 +96,6 @@ export default function CreatePlanScreen({ navigation, route }) {
       ]);
       setExerciseLibrary(exData.data || exData.exercises || exData || []);
       setTemplates(tData.data || tData.templates || tData || []);
-      // Count existing plans by type
       const fetchedPlans = (plansData.data || plansData.plans || plansData);
       const plansArr = Array.isArray(fetchedPlans) ? fetchedPlans : [];
       setExistingPlans({
@@ -132,7 +129,6 @@ export default function CreatePlanScreen({ navigation, route }) {
       }
       setModeGoal(p.modeGoal || '');
       setRoutineType(p.routineType === 'one_time' ? 'one_time' : 'consistent');
-      // Calculate which week index this plan's weekStartDate corresponds to
       if (p.routineType === 'one_time' && p.weekStartDate) {
         setOverrideWeekIndex(getWeeksAhead(p.weekStartDate));
       } else {
@@ -188,11 +184,9 @@ export default function CreatePlanScreen({ navigation, route }) {
     ? getDayExercises(currentDay, currentMuscle)
     : [];
 
-  // Check if a day is fully configured (has muscles + at least 2 exercises per muscle)
   const isDayConfigured = (dayOfWeek) => {
     const config = dayConfigs[dayOfWeek];
     if (!config || !config.muscles || config.muscles.length === 0) return false;
-    // Each muscle must have at least 2 exercises
     return config.muscles.every(m => getDayExercises(dayOfWeek, m).length >= 2);
   };
 
@@ -200,18 +194,15 @@ export default function CreatePlanScreen({ navigation, route }) {
 
   // ── Handlers ───────────────────────────────────────────────────────
 
-  // Toggle a day selection
   const toggleDay = (dayIndex) => {
     setSelectedDays(prev => {
       if (prev.includes(dayIndex)) {
-        // Remove day and its config
         const newDays = prev.filter(d => d !== dayIndex);
         const newConfigs = { ...dayConfigs };
         delete newConfigs[dayIndex];
         setDayConfigs(newConfigs);
         return newDays;
       } else {
-        // Add day (keep sorted)
         const newDays = [...prev, dayIndex].sort((a, b) => a - b);
         setDayConfigs(prevC => ({
           ...prevC,
@@ -222,15 +213,12 @@ export default function CreatePlanScreen({ navigation, route }) {
     });
   };
 
-  // Toggle a muscle group for the current day
   const toggleMuscle = (muscle) => {
     const config = dayConfigs[currentDay] || { muscles: [], exercises: [] };
     const muscles = config.muscles.includes(muscle)
       ? config.muscles.filter(m => m !== muscle)
       : [...config.muscles, muscle];
-    // Remove exercises for removed muscle
     const exercises = config.exercises.filter(e => e.muscleGroup !== muscle || muscles.includes(e.muscleGroup));
-    // Clamp currentMuscleIndex to prevent out-of-bounds
     if (currentMuscleIndex >= muscles.length && muscles.length > 0) {
       setCurrentMuscleIndex(muscles.length - 1);
     }
@@ -240,7 +228,6 @@ export default function CreatePlanScreen({ navigation, route }) {
     }));
   };
 
-  // Add an exercise to the current day's current muscle
   const addExercise = (ex, isCustom = false) => {
     const config = dayConfigs[currentDay] || { muscles: [], exercises: [] };
     const newExercise = isCustom
@@ -257,7 +244,7 @@ export default function CreatePlanScreen({ navigation, route }) {
           exerciseId: ex.id,
           name: ex.name,
           muscleGroup: currentMuscle,
-          targetSets: 3, // default, user configures later
+          targetSets: 3,
           targetReps: '10-12',
           targetWeight: 0,
           isCustom: false,
@@ -276,7 +263,6 @@ export default function CreatePlanScreen({ navigation, route }) {
     setShowCustomInput(false);
   };
 
-  // Remove an exercise from the current day
   const removeExercise = (exerciseId) => {
     const config = dayConfigs[currentDay] || { muscles: [], exercises: [] };
     setDayConfigs(prev => ({
@@ -288,7 +274,6 @@ export default function CreatePlanScreen({ navigation, route }) {
     }));
   };
 
-  // Update exercise config (sets, reps, weight)
   const updateExerciseConfig = (exerciseId, field, value) => {
     const config = dayConfigs[currentDay] || { muscles: [], exercises: [] };
     setDayConfigs(prev => ({
@@ -302,7 +287,6 @@ export default function CreatePlanScreen({ navigation, route }) {
     }));
   };
 
-  // Move to next muscle or sub-step
   const advanceDayConfig = () => {
     if (daySubStep === 'muscles') {
       if (currentConfig.muscles.length === 0) {
@@ -317,26 +301,22 @@ export default function CreatePlanScreen({ navigation, route }) {
         Alert.alert('Need More Exercises', `Please add at least 2 exercises for ${MUSCLE_LABELS[currentMuscle] || currentMuscle}.`);
         return;
       }
-      // Move to next muscle, or to config step
       if (currentMuscleIndex < currentConfig.muscles.length - 1) {
         setCurrentMuscleIndex(currentMuscleIndex + 1);
       } else {
         setDaySubStep('config');
       }
     } else if (daySubStep === 'config') {
-      // Day is fully configured, move to next day or back to days
       if (currentDayIndex < selectedDays.length - 1) {
         setCurrentDayIndex(currentDayIndex + 1);
         setDaySubStep('muscles');
         setCurrentMuscleIndex(0);
       } else {
-        // All days done, go to review
         goToStep('review');
       }
     }
   };
 
-  // Go back in day config
   const backDayConfig = () => {
     if (daySubStep === 'exercises') {
       if (currentMuscleIndex > 0) {
@@ -358,7 +338,6 @@ export default function CreatePlanScreen({ navigation, route }) {
     }
   };
 
-  // Skip to a specific day in the day list
   const configureDay = (index) => {
     setCurrentDayIndex(index);
     setDaySubStep('muscles');
@@ -378,7 +357,6 @@ export default function CreatePlanScreen({ navigation, route }) {
       configs[d.dayOfWeek] = {
         muscles,
         exercises: d.exercises.map((e, i) => {
-          // Match template exercise name against the loaded exercise library
           const matched = exerciseLibrary.find(
             lib => lib.name.toLowerCase() === e.name.toLowerCase() && lib.muscleGroup === e.muscleGroup
           );
@@ -389,12 +367,13 @@ export default function CreatePlanScreen({ navigation, route }) {
             targetSets: e.targetSets || 3,
             targetReps: e.targetReps || '10-12',
             targetWeight: 0,
-            isCustom: !matched, // treat unmatched as custom so name is preserved
+            isCustom: !matched,
           };
         }),
       };
     });
-    setDayConfigs(configs);      setPlanName(template.name || 'My Plan');
+    setDayConfigs(configs);
+    setPlanName(template.name || 'My Plan');
     setPlanMode('');
     setModeGoal('');
     setCustomMode('');
@@ -418,7 +397,7 @@ export default function CreatePlanScreen({ navigation, route }) {
           dayOfWeek,
           workoutName: `${DAY_LABELS_FULL[dayOfWeek]} — ${config.muscles.map(m => MUSCLE_LABELS[m] || m).join('/')}`,
           isRestDay: false,
-          estimatedDuration: config.exercises.length * 5 + 10, // rough: 5 min per exercise + warmup
+          estimatedDuration: config.exercises.length * 5 + 10,
           exercises: config.exercises.map(e => ({
             exerciseId: e.isCustom ? '' : e.exerciseId,
             customExerciseName: e.isCustom ? e.name : '',
@@ -447,7 +426,6 @@ export default function CreatePlanScreen({ navigation, route }) {
       }
     } catch (err) {
       const msg = err.message || 'Failed to save plan.';
-      // Timed out — plan was likely created on the server, navigate back
       if (msg.toLowerCase().includes('timed out') || msg.toLowerCase().includes('timeout')) {
         Alert.alert(
           'Routine Likely Saved',
@@ -493,9 +471,9 @@ export default function CreatePlanScreen({ navigation, route }) {
   // ── Loading State ──────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading exercise library...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading exercise library...</Text>
       </View>
     );
   }
@@ -503,11 +481,11 @@ export default function CreatePlanScreen({ navigation, route }) {
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => {
           if (step === 'day-config') {
             Alert.alert('Leave?', 'You will lose unsaved changes to this day.', [
@@ -518,9 +496,9 @@ export default function CreatePlanScreen({ navigation, route }) {
             navigation.goBack();
           }
         }}>
-          <Text style={styles.headerBack}>← Back</Text>
+          <Text style={[styles.headerBack, { color: colors.accent }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
+        <Text style={[styles.headerTitle, { color: colors.textHeading }]}>
           {isEditing ? 'Edit Routine' : 'Create Weekly Routine'}
         </Text>
         <View style={{ width: 50 }} />
@@ -528,7 +506,7 @@ export default function CreatePlanScreen({ navigation, route }) {
 
       {/* ── Step Indicator ─────────────────────────────────────────── */}
       {step !== 'approach' && (
-        <View style={styles.stepIndicator}>
+        <View style={[styles.stepIndicator, { backgroundColor: colors.surface }]}>
           {STEPS.slice(1).map((label, i) => {
             const stepKey = ['days', 'day-config', 'review'][i];
             const isActive = step === stepKey || (step === 'day-config' && stepKey === 'day-config');
@@ -536,21 +514,20 @@ export default function CreatePlanScreen({ navigation, route }) {
               (step === 'review' || (step === 'day-config' && stepKey === 'days'));
             return (
               <React.Fragment key={label}>
-                {i > 0 && <View style={[styles.stepLine, isPast && styles.stepLineActive]} />}
+                {i > 0 && <View style={[styles.stepLine, { backgroundColor: isPast ? colors.accent : colors.border }]} />}
                 <View style={styles.stepDotWrap}>
                   <View style={[
                     styles.stepDot,
-                    isActive && styles.stepDotActive,
-                    isPast && styles.stepDotDone,
+                    { backgroundColor: isActive ? colors.accent : isPast ? colors.accentSoft : colors.border },
                   ]}>
                     <Text style={[
                       styles.stepDotText,
-                      (isActive || isPast) && styles.stepDotTextActive,
+                      { color: (isActive || isPast) ? colors.textInverse : colors.textSecondary },
                     ]}>
                       {isPast ? '✓' : i + 1}
                     </Text>
                   </View>
-                  <Text style={[styles.stepLabel, isActive && styles.stepLabelActive]}>
+                  <Text style={[styles.stepLabel, { color: isActive ? colors.accent : colors.textMuted, fontWeight: isActive ? '600' : '400' }]}>
                     {label}
                   </Text>
                 </View>
@@ -571,53 +548,51 @@ export default function CreatePlanScreen({ navigation, route }) {
             ═══════════════════════════════════════════════════════════ */}
         {step === 'approach' && !isEditing && (
           <View>
-            <Text style={styles.sectionTitle}>Choose Your Approach</Text>
-            <Text style={styles.sectionSub}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>Choose Your Approach</Text>
+            <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
               Pick a pre-built template for quick setup, or build your own custom plan.
             </Text>
 
-            {/* Custom Plan Button */}
             <TouchableOpacity
-              style={[styles.approachCard, Shadows.md]}
+              style={[styles.approachCard, { backgroundColor: colors.accentBg, borderColor: colors.accent }, Shadows.md]}
               onPress={() => { setApproach('custom'); goToStep('days'); }}
             >
               <Text style={styles.approachIcon}>⚡</Text>
               <View style={styles.approachInfo}>
-                <Text style={styles.approachTitle}>Build Custom Routine</Text>
-                <Text style={styles.approachDesc}>
+                <Text style={[styles.approachTitle, { color: colors.textHeading }]}>Build Custom Routine</Text>
+                <Text style={[styles.approachDesc, { color: colors.textSecondary }]}>
                   Design your own weekly routine from scratch — days, muscles, exercises, and goals.
                 </Text>
               </View>
-              <Text style={styles.approachArrow}>→</Text>
+              <Text style={[styles.approachArrow, { color: colors.accent }]}>→</Text>
             </TouchableOpacity>
 
-            {/* Templates */}
-            <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing['2xl'] }]}>
               Pre-Tailored Templates
             </Text>
             {templates.map((tmpl, idx) => (
               <TouchableOpacity
                 key={idx}
-                style={[styles.templateCard, Shadows.sm]}
+                style={[styles.templateCard, { backgroundColor: colors.surface }, Shadows.sm]}
                 onPress={() => selectTemplate(tmpl)}
               >
                 <View style={styles.templateHeader}>
-                  <Text style={styles.templateName}>{tmpl.name}</Text>
-                  <Text style={styles.templateDays}>{tmpl.days?.length || 0} days/wk</Text>
+                  <Text style={[styles.templateName, { color: colors.textHeading }]}>{tmpl.name}</Text>
+                  <Text style={[styles.templateDays, { color: colors.accent, backgroundColor: colors.accentBg }]}>{tmpl.days?.length || 0} days/wk</Text>
                 </View>
-                <Text style={styles.templateDesc}>{tmpl.description}</Text>
+                <Text style={[styles.templateDesc, { color: colors.textSecondary }]}>{tmpl.description}</Text>
                 <View style={styles.templateMuscles}>
                   {[...new Set(
                     (tmpl.days || []).flatMap(d =>
                       (d.exercises || []).map(e => e.muscleGroup)
                     )
                   )].slice(0, 6).map(m => (
-                    <View key={m} style={styles.miniMuscleChip}>
-                      <Text style={styles.miniMuscleText}>{MUSCLE_LABELS[m] || m}</Text>
+                    <View key={m} style={[styles.miniMuscleChip, { backgroundColor: colors.divider }]}>
+                      <Text style={[styles.miniMuscleText, { color: colors.textSecondary }]}>{MUSCLE_LABELS[m] || m}</Text>
                     </View>
                   ))}
                 </View>
-                <Text style={styles.templateAction}>Use This Template →</Text>
+                <Text style={[styles.templateAction, { color: colors.accent }]}>Use This Template →</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -628,12 +603,11 @@ export default function CreatePlanScreen({ navigation, route }) {
             ═══════════════════════════════════════════════════════════ */}
         {step === 'days' && (
           <View>
-            <Text style={styles.sectionTitle}>Select Your Workout Days</Text>
-            <Text style={styles.sectionSub}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>Select Your Workout Days</Text>
+            <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
               Tap the days you commit to working out. You'll configure each day next.
             </Text>
 
-            {/* Day Chips */}
             <View style={styles.dayChipGrid}>
               {DAY_LABELS.map((label, idx) => {
                 const isSelected = selectedDays.includes(idx);
@@ -643,29 +617,27 @@ export default function CreatePlanScreen({ navigation, route }) {
                     key={idx}
                     style={[
                       styles.dayChip,
-                      isSelected && styles.dayChipSelected,
-                      isConfigured && styles.dayChipConfigured,
+                      { backgroundColor: isConfigured ? colors.accentBg : isSelected ? colors.accentBg : colors.surface, borderColor: isConfigured ? colors.success : isSelected ? colors.accentSoft : colors.border },
                     ]}
                     onPress={() => toggleDay(idx)}
                   >
                     <Text style={[
                       styles.dayChipText,
-                      isSelected && styles.dayChipTextSelected,
+                      { color: isSelected ? colors.accent : colors.textSecondary, fontWeight: isSelected ? '700' : '400' },
                     ]}>
                       {label}
                     </Text>
                     {isConfigured && (
-                      <Text style={styles.dayChipCheck}>✓</Text>
+                      <Text style={[styles.dayChipCheck, { color: colors.success }]}>✓</Text>
                     )}
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {/* Selected days list */}
             {selectedDays.length > 0 && (
               <View style={styles.selectedDaysSection}>
-                <Text style={styles.sectionSub}>
+                <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
                   Tap a day to configure it. Days with ✓ are fully set up.
                 </Text>
                 {selectedDays.map((dayIdx, i) => {
@@ -673,26 +645,26 @@ export default function CreatePlanScreen({ navigation, route }) {
                   return (
                     <TouchableOpacity
                       key={dayIdx}
-                      style={[styles.selectedDayRow, configured && styles.selectedDayRowDone]}
+                      style={[styles.selectedDayRow, { backgroundColor: colors.surface, borderLeftColor: configured ? colors.success : 'transparent' }, configured && { borderLeftWidth: 3 }]}
                       onPress={() => configureDay(i)}
                     >
                       <View style={styles.selectedDayLeft}>
-                        <View style={[styles.dayDot, configured && styles.dayDotDone]}>
-                          <Text style={styles.dayDotText}>
+                        <View style={[styles.dayDot, { backgroundColor: configured ? colors.success : colors.border }]}>
+                          <Text style={[styles.dayDotText, { color: colors.textSecondary }]}>
                             {configured ? '✓' : i + 1}
                           </Text>
                         </View>
-                        <Text style={styles.selectedDayLabel}>
+                        <Text style={[styles.selectedDayLabel, { color: colors.textHeading }]}>
                           {DAY_LABELS_FULL[dayIdx]}
                         </Text>
                       </View>
                       <View style={styles.selectedDayRight}>
                         {configured && dayConfigs[dayIdx] && (
-                          <Text style={styles.selectedDaySummary}>
+                          <Text style={[styles.selectedDaySummary, { color: colors.textSecondary }]}>
                             {dayConfigs[dayIdx].muscles.map(m => MUSCLE_LABELS[m] || m).join(', ')}
                           </Text>
                         )}
-                        <Text style={styles.selectedDayAction}>
+                        <Text style={[styles.selectedDayAction, { color: colors.accent }]}>
                           {configured ? 'Edit →' : 'Configure →'}
                         </Text>
                       </View>
@@ -702,24 +674,23 @@ export default function CreatePlanScreen({ navigation, route }) {
               </View>
             )}
 
-            {/* Continue button */}
             {selectedDays.length > 0 && (
               <TouchableOpacity
                 style={[
                   styles.primaryBtn,
+                  { backgroundColor: colors.accent },
                   !allDaysConfigured && styles.primaryBtnDim,
                 ]}
                 onPress={() => {
                   if (allDaysConfigured) {
                     goToStep('review');
                   } else {
-                    // Start configuring the first unconfigured day
                     const firstUnconfigured = selectedDays.findIndex(d => !isDayConfigured(d));
                     configureDay(firstUnconfigured >= 0 ? firstUnconfigured : 0);
                   }
                 }}
               >
-                <Text style={styles.primaryBtnText}>
+                <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>
                   {allDaysConfigured ? 'Review Plan →' : 'Configure Days →'}
                 </Text>
               </TouchableOpacity>
@@ -732,25 +703,23 @@ export default function CreatePlanScreen({ navigation, route }) {
             ═══════════════════════════════════════════════════════════ */}
         {step === 'day-config' && (
           <View>
-            {/* Day progress bar */}
             <View style={styles.dayProgressBar}>
               {selectedDays.map((d, i) => (
                 <View
                   key={d}
                   style={[
                     styles.dayProgressDot,
+                    { backgroundColor: i === currentDayIndex ? colors.accent : (isDayConfigured(d) || i < currentDayIndex) ? colors.success : colors.border },
                     i === currentDayIndex && styles.dayProgressDotActive,
-                    isDayConfigured(d) && i !== currentDayIndex && styles.dayProgressDotDone,
-                    i < currentDayIndex && styles.dayProgressDotDone,
                   ]}
                 />
               ))}
             </View>
 
-            <Text style={styles.sectionTitle}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>
               {DAY_LABELS_FULL[currentDay]}
             </Text>
-            <Text style={styles.sectionSub}>
+            <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
               {daySubStep === 'muscles' && 'Which muscle groups are you targeting?'}
               {daySubStep === 'exercises' && `Exercises for ${MUSCLE_LABELS[currentMuscle] || currentMuscle} (min 2)`}
               {daySubStep === 'config' && 'Configure sets, reps, and weight for each exercise'}
@@ -765,12 +734,12 @@ export default function CreatePlanScreen({ navigation, route }) {
                     return (
                       <TouchableOpacity
                         key={muscle}
-                        style={[styles.muscleChip, isSelected && styles.muscleChipSelected]}
+                        style={[styles.muscleChip, { backgroundColor: isSelected ? colors.accentBg : colors.surface, borderColor: isSelected ? colors.accent : colors.border }]}
                         onPress={() => toggleMuscle(muscle)}
                       >
                         <Text style={[
                           styles.muscleChipText,
-                          isSelected && styles.muscleChipTextSelected,
+                          { color: isSelected ? colors.accent : colors.textSecondary, fontWeight: isSelected ? '700' : '400' },
                         ]}>
                           {MUSCLE_LABELS[muscle]}
                         </Text>
@@ -784,28 +753,26 @@ export default function CreatePlanScreen({ navigation, route }) {
             {/* ── Sub-step: Exercises ─────────────────────────────── */}
             {daySubStep === 'exercises' && (
               <View>
-                {/* Currently added exercises */}
                 {exercisesForCurrentMuscle.map((ex, i) => (
-                  <View key={ex.exerciseId || i} style={[styles.exerciseItem, Shadows.sm]}>
+                  <View key={ex.exerciseId || i} style={[styles.exerciseItem, { backgroundColor: colors.surface }, Shadows.sm]}>
                     <View style={styles.exerciseItemLeft}>
-                      <Text style={styles.exerciseItemName}>{ex.name}</Text>
+                      <Text style={[styles.exerciseItemName, { color: colors.textHeading }]}>{ex.name}</Text>
                       {ex.isCustom && (
-                        <View style={styles.customBadge}>
-                          <Text style={styles.customBadgeText}>Custom</Text>
+                        <View style={[styles.customBadge, { backgroundColor: colors.accentBg }]}>
+                          <Text style={[styles.customBadgeText, { color: colors.accent }]}>Custom</Text>
                         </View>
                       )}
                     </View>
                     <TouchableOpacity
                       onPress={() => removeExercise(ex.exerciseId)}
-                      style={styles.removeBtn}
+                      style={[styles.removeBtn, { backgroundColor: colors.divider }]}
                     >
-                      <Text style={styles.removeBtnText}>✕</Text>
+                      <Text style={[styles.removeBtnText, { color: colors.error }]}>✕</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
 
-                {/* Library exercises for this muscle */}
-                <Text style={styles.subsectionTitle}>
+                <Text style={[styles.subsectionTitle, { color: colors.textSecondary }]}>
                   Exercise Library — {MUSCLE_LABELS[currentMuscle] || currentMuscle}
                 </Text>
                 {exercisesForMuscle.slice(0, 15).map(ex => {
@@ -818,6 +785,7 @@ export default function CreatePlanScreen({ navigation, route }) {
                       style={[
                         styles.exerciseItem,
                         styles.exerciseItemAdd,
+                        { backgroundColor: alreadyAdded ? colors.divider : colors.surface, borderColor: colors.border },
                         alreadyAdded && styles.exerciseItemAdded,
                         Shadows.sm,
                       ]}
@@ -826,11 +794,11 @@ export default function CreatePlanScreen({ navigation, route }) {
                     >
                       <Text style={[
                         styles.exerciseItemName,
-                        alreadyAdded && styles.exerciseItemAddedText,
+                        { color: alreadyAdded ? colors.textMuted : colors.textHeading },
                       ]}>
                         {ex.name}
                       </Text>
-                      <Text style={styles.exerciseItemMeta}>
+                      <Text style={[styles.exerciseItemMeta, { color: colors.textMuted }]}>
                         {ex.equipment}
                         {alreadyAdded ? ' • Added' : ''}
                       </Text>
@@ -838,52 +806,51 @@ export default function CreatePlanScreen({ navigation, route }) {
                   );
                 })}
 
-                {/* Custom exercise input */}
                 {!showCustomInput ? (
                   <TouchableOpacity
-                    style={styles.customAddBtn}
+                    style={[styles.customAddBtn, { borderColor: colors.accent }]}
                     onPress={() => setShowCustomInput(true)}
                   >
-                    <Text style={styles.customAddBtnText}>+ Add Custom Exercise</Text>
+                    <Text style={[styles.customAddBtnText, { color: colors.accent }]}>+ Add Custom Exercise</Text>
                   </TouchableOpacity>
                 ) : (
-                  <View style={[styles.customInputCard, Shadows.sm]}>
-                    <Text style={styles.subsectionTitle}>Custom Exercise</Text>
+                  <View style={[styles.customInputCard, { backgroundColor: colors.surface }, Shadows.sm]}>
+                    <Text style={[styles.subsectionTitle, { color: colors.textSecondary }]}>Custom Exercise</Text>
                     <TextInput
-                      style={styles.textInput}
+                      style={[styles.textInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
                       placeholder="Exercise name (e.g., Cable Crossover)"
-                      placeholderTextColor={Colors.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       value={customExerciseName}
                       onChangeText={setCustomExerciseName}
                     />
                     <View style={styles.customInputRow}>
                       <View style={styles.customInputHalf}>
-                        <Text style={styles.inputLabel}>Sets</Text>
+                        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Sets</Text>
                         <TextInput
-                          style={styles.textInputSmall}
+                          style={[styles.textInputSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
                           placeholder="3"
-                          placeholderTextColor={Colors.textMuted}
+                          placeholderTextColor={colors.textMuted}
                           keyboardType="numeric"
                           value={customSets}
                           onChangeText={setCustomSets}
                         />
                       </View>
                       <View style={styles.customInputHalf}>
-                        <Text style={styles.inputLabel}>Reps</Text>
+                        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Reps</Text>
                         <TextInput
-                          style={styles.textInputSmall}
+                          style={[styles.textInputSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
                           placeholder="10-12"
-                          placeholderTextColor={Colors.textMuted}
+                          placeholderTextColor={colors.textMuted}
                           value={customReps}
                           onChangeText={setCustomReps}
                         />
                       </View>
                       <View style={styles.customInputHalf}>
-                        <Text style={styles.inputLabel}>Weight (lbs)</Text>
+                        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Weight (lbs)</Text>
                         <TextInput
-                          style={styles.textInputSmall}
+                          style={[styles.textInputSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
                           placeholder="0"
-                          placeholderTextColor={Colors.textMuted}
+                          placeholderTextColor={colors.textMuted}
                           keyboardType="decimal-pad"
                           value={customWeight}
                           onChangeText={setCustomWeight}
@@ -892,38 +859,40 @@ export default function CreatePlanScreen({ navigation, route }) {
                     </View>
                     <View style={styles.customInputActions}>
                       <TouchableOpacity
-                        style={styles.cancelBtn}
+                        style={[styles.cancelBtn, { backgroundColor: colors.divider }]}
                         onPress={() => setShowCustomInput(false)}
                       >
-                        <Text style={styles.cancelBtnText}>Cancel</Text>
+                        <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[
                           styles.addBtn,
+                          { backgroundColor: colors.accent },
                           !customExerciseName.trim() && styles.addBtnDisabled,
                         ]}
                         onPress={() => addExercise(null, true)}
                         disabled={!customExerciseName.trim()}
                       >
-                        <Text style={styles.addBtnText}>Add Exercise</Text>
+                        <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add Exercise</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 )}
 
-                {/* Muscle progress within exercises sub-step */}
                 {currentConfig.muscles.length > 1 && (
-                  <View style={styles.muscleSubProgress}>
+                  <View style={[styles.muscleSubProgress, { borderTopColor: colors.border }]}>
                     {currentConfig.muscles.map((m, i) => {
                       const exCount = getDayExercises(currentDay, m).length;
                       return (
                         <View key={m} style={styles.muscleSubDotWrap}>
                           <View style={[
                             styles.muscleSubDot,
-                            i === currentMuscleIndex && styles.muscleSubDotActive,
-                            i < currentMuscleIndex && styles.muscleSubDotDone,
+                            { backgroundColor: i === currentMuscleIndex ? colors.accent : i < currentMuscleIndex ? colors.success : colors.border },
                           ]} />
-                          <Text style={[styles.muscleSubLabel, i === currentMuscleIndex && styles.muscleSubLabelActive]}>
+                          <Text style={[
+                            styles.muscleSubLabel,
+                            { color: i === currentMuscleIndex ? colors.accent : colors.textMuted, fontWeight: i === currentMuscleIndex ? '600' : '400' },
+                          ]}>
                             {MUSCLE_LABELS[m]} ({exCount})
                           </Text>
                         </View>
@@ -938,51 +907,51 @@ export default function CreatePlanScreen({ navigation, route }) {
             {daySubStep === 'config' && (
               <View>
                 {currentConfig.exercises.map((ex, i) => (
-                  <View key={ex.exerciseId || i} style={[styles.configCard, Shadows.sm]}>
-                    <Text style={styles.configExName}>
+                  <View key={ex.exerciseId || i} style={[styles.configCard, { backgroundColor: colors.surface }, Shadows.sm]}>
+                    <Text style={[styles.configExName, { color: colors.textHeading }]}>
                       {ex.name}
-                      <Text style={styles.configExMuscle}> — {MUSCLE_LABELS[ex.muscleGroup] || ex.muscleGroup}</Text>
+                      <Text style={{ color: colors.textMuted }}> — {MUSCLE_LABELS[ex.muscleGroup] || ex.muscleGroup}</Text>
                     </Text>
 
                     <View style={styles.configRow}>
                       <View style={styles.configField}>
-                        <Text style={styles.inputLabel}>Sets</Text>
+                        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Sets</Text>
                         <View style={styles.stepper}>
                           <TouchableOpacity
-                            style={styles.stepperBtn}
+                            style={[styles.stepperBtn, { backgroundColor: colors.divider }]}
                             onPress={() => updateExerciseConfig(ex.exerciseId, 'targetSets', Math.max(1, ex.targetSets - 1))}
                           >
-                            <Text style={styles.stepperBtnText}>−</Text>
+                            <Text style={[styles.stepperBtnText, { color: colors.textHeading }]}>−</Text>
                           </TouchableOpacity>
-                          <Text style={styles.stepperValue}>{ex.targetSets}</Text>
+                          <Text style={[styles.stepperValue, { color: colors.textHeading }]}>{ex.targetSets}</Text>
                           <TouchableOpacity
-                            style={styles.stepperBtn}
+                            style={[styles.stepperBtn, { backgroundColor: colors.divider }]}
                             onPress={() => updateExerciseConfig(ex.exerciseId, 'targetSets', Math.min(10, ex.targetSets + 1))}
                           >
-                            <Text style={styles.stepperBtnText}>+</Text>
+                            <Text style={[styles.stepperBtnText, { color: colors.textHeading }]}>+</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
 
                       <View style={styles.configField}>
-                        <Text style={styles.inputLabel}>Reps</Text>
+                        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Reps</Text>
                         <TextInput
-                          style={styles.textInputSmall}
+                          style={[styles.textInputSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
                           value={ex.targetReps}
                           onChangeText={(v) => updateExerciseConfig(ex.exerciseId, 'targetReps', v)}
-                          placeholderTextColor={Colors.textMuted}
+                          placeholderTextColor={colors.textMuted}
                         />
                       </View>
 
                       <View style={styles.configField}>
-                        <Text style={styles.inputLabel}>Weight (lbs)</Text>
+                        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Weight (lbs)</Text>
                         <TextInput
-                          style={styles.textInputSmall}
+                          style={[styles.textInputSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
                           value={ex.targetWeight ? String(ex.targetWeight) : ''}
                           onChangeText={(v) => updateExerciseConfig(ex.exerciseId, 'targetWeight', parseFloat(v) || 0)}
                           keyboardType="decimal-pad"
                           placeholder="0"
-                          placeholderTextColor={Colors.textMuted}
+                          placeholderTextColor={colors.textMuted}
                         />
                       </View>
                     </View>
@@ -990,21 +959,20 @@ export default function CreatePlanScreen({ navigation, route }) {
                 ))}
 
                 {currentConfig.exercises.length === 0 && (
-                  <Text style={styles.emptyText}>
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                     No exercises configured. Go back and add some!
                   </Text>
                 )}
               </View>
             )}
 
-            {/* Day config navigation */}
             <View style={styles.dayConfigNav}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={backDayConfig}>
-                <Text style={styles.secondaryBtnText}>← Back</Text>
+              <TouchableOpacity style={[styles.secondaryBtn, { backgroundColor: colors.divider }]} onPress={backDayConfig}>
+                <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>← Back</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.primaryBtn} onPress={advanceDayConfig}>
-                <Text style={styles.primaryBtnText}>
+              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={advanceDayConfig}>
+                <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>
                   {daySubStep === 'config'
                     ? (currentDayIndex < selectedDays.length - 1
                       ? `Next: ${DAY_LABELS[selectedDays[currentDayIndex + 1]]} →`
@@ -1021,23 +989,21 @@ export default function CreatePlanScreen({ navigation, route }) {
             ═══════════════════════════════════════════════════════════ */}
         {step === 'review' && (
           <View>
-            <Text style={styles.sectionTitle}>Review Your Routine</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>Review Your Routine</Text>
 
-            {/* Plan name */}
-            <Text style={styles.inputLabel}>Routine Name</Text>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Routine Name</Text>
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
               placeholder="e.g., My PPL Split, Summer Shred, etc."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={planName}
               onChangeText={setPlanName}
             />
 
-            {/* Mode Selection */}
-            <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing['2xl'] }]}>
               Training Mode
             </Text>
-            <Text style={styles.sectionSub}>
+            <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
               What's your goal for this routine?
             </Text>
 
@@ -1047,7 +1013,7 @@ export default function CreatePlanScreen({ navigation, route }) {
                   key={mode}
                   style={[
                     styles.modeCard,
-                    planMode === mode && styles.modeCardSelected,
+                    { backgroundColor: planMode === mode ? colors.accentBg : colors.surface, borderColor: planMode === mode ? colors.accent : colors.border },
                     Shadows.sm,
                   ]}
                   onPress={() => {
@@ -1060,11 +1026,11 @@ export default function CreatePlanScreen({ navigation, route }) {
                   </Text>
                   <Text style={[
                     styles.modeTitle,
-                    planMode === mode && styles.modeTitleSelected,
+                    { color: planMode === mode ? colors.accent : colors.textPrimary },
                   ]}>
                     {mode === 'bulking' ? 'Bulking' : 'Leaning'}
                   </Text>
-                  <Text style={styles.modeDesc}>
+                  <Text style={[styles.modeDesc, { color: colors.textMuted }]}>
                     {mode === 'bulking' ? 'Build muscle & gain strength' : 'Cut fat & maintain muscle'}
                   </Text>
                 </TouchableOpacity>
@@ -1072,7 +1038,7 @@ export default function CreatePlanScreen({ navigation, route }) {
               <TouchableOpacity
                 style={[
                   styles.modeCard,
-                  planMode === 'custom' && styles.modeCardSelected,
+                  { backgroundColor: planMode === 'custom' ? colors.accentBg : colors.surface, borderColor: planMode === 'custom' ? colors.accent : colors.border },
                   Shadows.sm,
                 ]}
                 onPress={() => {
@@ -1083,33 +1049,31 @@ export default function CreatePlanScreen({ navigation, route }) {
                 <Text style={styles.modeIcon}>🎯</Text>
                 <Text style={[
                   styles.modeTitle,
-                  planMode === 'custom' && styles.modeTitleSelected,
+                  { color: planMode === 'custom' ? colors.accent : colors.textPrimary },
                 ]}>
                   Custom
                 </Text>
-                <Text style={styles.modeDesc}>Your own unique goal</Text>
+                <Text style={[styles.modeDesc, { color: colors.textMuted }]}>Your own unique goal</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Custom mode name input */}
             {planMode === 'custom' && (
               <TextInput
-                style={[styles.textInput, { marginTop: Spacing.md }]}
+                style={[styles.textInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading, marginTop: Spacing.md }]}
                 placeholder="Name your mode (e.g., Body Recomp, Powerbuilding)"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 value={customMode}
                 onChangeText={setCustomMode}
               />
             )}
 
-            {/* Mode goal description */}
             {planMode !== '' && (
               <>
-                <Text style={[styles.inputLabel, { marginTop: Spacing.lg }]}>
+                <Text style={[styles.inputLabel, { marginTop: Spacing.lg, color: colors.textSecondary }]}>
                   Goal Description
                 </Text>
                 <TextInput
-                  style={[styles.textInput, styles.textArea]}
+                  style={[styles.textInput, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textHeading }]}
                   placeholder={
                     planMode === 'bulking'
                       ? 'e.g., Gain 10 lbs of lean muscle over 12 weeks. Focus on progressive overload and calorie surplus.'
@@ -1117,7 +1081,7 @@ export default function CreatePlanScreen({ navigation, route }) {
                       ? 'e.g., Drop to 12% body fat while keeping muscle. Maintain 500kcal deficit with high protein.'
                       : 'Describe what this custom mode means for you and what you want to achieve.'
                   }
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={modeGoal}
                   onChangeText={setModeGoal}
                   multiline
@@ -1126,16 +1090,14 @@ export default function CreatePlanScreen({ navigation, route }) {
               </>
             )}
 
-            {/* Routine Type Selection */}
-            <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing['2xl'] }]}>
               Routine Schedule
             </Text>
-            <Text style={styles.sectionSub}>
+            <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
               Should this routine repeat every week, or override a specific week?
             </Text>
-            {/* Limit info */}
-            <View style={styles.limitInfoRow}>
-              <Text style={styles.limitInfoText}>
+            <View style={[styles.limitInfoRow, { backgroundColor: colors.divider }]}>
+              <Text style={[styles.limitInfoText, { color: colors.textSecondary }]}>
                 Routines: {existingPlans.consistent}/{MAX_CONSISTENT} • Overrides: {existingPlans.oneTime}/{MAX_ONE_TIME}
               </Text>
             </View>
@@ -1144,7 +1106,7 @@ export default function CreatePlanScreen({ navigation, route }) {
               <TouchableOpacity
                 style={[
                   styles.routineTypeCard,
-                  routineType === 'consistent' && styles.routineTypeCardSelected,
+                  { backgroundColor: routineType === 'consistent' ? colors.accentBg : colors.surface, borderColor: routineType === 'consistent' ? colors.accent : colors.border },
                   existingPlans.consistent >= MAX_CONSISTENT && styles.routineTypeCardDisabled,
                 ]}
                 onPress={() => {
@@ -1158,22 +1120,22 @@ export default function CreatePlanScreen({ navigation, route }) {
                 <Text style={styles.routineTypeIcon}>🔄</Text>
                 <Text style={[
                   styles.routineTypeTitle,
-                  routineType === 'consistent' && styles.routineTypeTitleSelected,
+                  { color: routineType === 'consistent' ? colors.accent : colors.textPrimary },
                 ]}>
                   Consistent
                 </Text>
-                <Text style={styles.routineTypeDesc}>
+                <Text style={[styles.routineTypeDesc, { color: colors.textMuted }]}>
                   Repeats every week automatically
                 </Text>
                 {existingPlans.consistent >= MAX_CONSISTENT && (
-                  <Text style={styles.routineTypeLimit}>Limit reached</Text>
+                  <Text style={[styles.routineTypeLimit, { color: colors.error }]}>Limit reached</Text>
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.routineTypeCard,
-                  routineType === 'one_time' && styles.routineTypeCardSelected,
+                  { backgroundColor: routineType === 'one_time' ? colors.accentBg : colors.surface, borderColor: routineType === 'one_time' ? colors.accent : colors.border },
                   existingPlans.oneTime >= MAX_ONE_TIME && styles.routineTypeCardDisabled,
                 ]}
                 onPress={() => {
@@ -1187,23 +1149,22 @@ export default function CreatePlanScreen({ navigation, route }) {
                 <Text style={styles.routineTypeIcon}>📅</Text>
                 <Text style={[
                   styles.routineTypeTitle,
-                  routineType === 'one_time' && styles.routineTypeTitleSelected,
+                  { color: routineType === 'one_time' ? colors.accent : colors.textPrimary },
                 ]}>
                   One-Time
                 </Text>
-                <Text style={styles.routineTypeDesc}>
+                <Text style={[styles.routineTypeDesc, { color: colors.textMuted }]}>
                   Overrides a single week only
                 </Text>
                 {existingPlans.oneTime >= MAX_ONE_TIME && (
-                  <Text style={styles.routineTypeLimit}>Limit reached</Text>
+                  <Text style={[styles.routineTypeLimit, { color: colors.error }]}>Limit reached</Text>
                 )}
               </TouchableOpacity>
             </View>
 
-            {/* Week picker for one-time routines */}
             {routineType === 'one_time' && (
               <View style={styles.weekPickerSection}>
-                <Text style={[styles.inputLabel, { marginTop: Spacing.md }]}>
+                <Text style={[styles.inputLabel, { marginTop: Spacing.md, color: colors.textSecondary }]}>
                   Select which week to override
                 </Text>
                 <View style={styles.weekPickerRow}>
@@ -1214,19 +1175,19 @@ export default function CreatePlanScreen({ navigation, route }) {
                         key={i}
                         style={[
                           styles.weekChip,
-                          overrideWeekIndex === i && styles.weekChipSelected,
+                          { backgroundColor: overrideWeekIndex === i ? colors.accentBg : colors.surface, borderColor: overrideWeekIndex === i ? colors.accent : colors.border },
                         ]}
                         onPress={() => setOverrideWeekIndex(i)}
                       >
                         <Text style={[
                           styles.weekChipLabel,
-                          overrideWeekIndex === i && styles.weekChipLabelSelected,
+                          { color: overrideWeekIndex === i ? colors.accent : colors.textPrimary },
                         ]}>
                           {i === 0 ? 'This Week' : i === 1 ? 'Next Week' : `+${i} Weeks`}
                         </Text>
                         <Text style={[
                           styles.weekChipDate,
-                          overrideWeekIndex === i && styles.weekChipDateSelected,
+                          { color: overrideWeekIndex === i ? colors.accent : colors.textMuted },
                         ]}>
                           {formatWeekLabel(monday)}
                         </Text>
@@ -1237,8 +1198,7 @@ export default function CreatePlanScreen({ navigation, route }) {
               </View>
             )}
 
-            {/* Day summaries */}
-            <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing['2xl'] }]}>
               Weekly Schedule
             </Text>
             {selectedDays.map((dayIdx, i) => {
@@ -1247,22 +1207,22 @@ export default function CreatePlanScreen({ navigation, route }) {
               return (
                 <TouchableOpacity
                   key={dayIdx}
-                  style={[styles.reviewDayCard, Shadows.sm]}
+                  style={[styles.reviewDayCard, { backgroundColor: colors.surface }, Shadows.sm]}
                   onPress={() => configureDay(i)}
                 >
                   <View style={styles.reviewDayHeader}>
-                    <Text style={styles.reviewDayLabel}>
+                    <Text style={[styles.reviewDayLabel, { color: colors.textHeading }]}>
                       {DAY_LABELS_FULL[dayIdx]}
                     </Text>
-                    <Text style={styles.reviewDayEdit}>Edit</Text>
+                    <Text style={[styles.reviewDayEdit, { color: colors.accent }]}>Edit</Text>
                   </View>
-                  <Text style={styles.reviewDayMuscles}>
+                  <Text style={[styles.reviewDayMuscles, { color: colors.accent }]}>
                     {config.muscles.map(m => MUSCLE_LABELS[m] || m).join(' · ')}
                   </Text>
                   {config.exercises.map((ex, j) => (
                     <View key={j} style={styles.reviewExerciseRow}>
-                      <Text style={styles.reviewExName}>• {ex.name}</Text>
-                      <Text style={styles.reviewExConfig}>
+                      <Text style={[styles.reviewExName, { color: colors.textHeading }]}>• {ex.name}</Text>
+                      <Text style={[styles.reviewExConfig, { color: colors.textSecondary }]}>
                         {ex.targetSets}×{ex.targetReps}
                         {ex.targetWeight > 0 ? ` @ ${ex.targetWeight}lbs` : ''}
                       </Text>
@@ -1272,31 +1232,30 @@ export default function CreatePlanScreen({ navigation, route }) {
               );
             })}
 
-            {/* Save / Delete buttons */}
             <TouchableOpacity
-              style={[styles.primaryBtn, styles.saveBtn]}
+              style={[styles.primaryBtn, styles.saveBtn, { backgroundColor: colors.accent }]}
               onPress={savePlan}
               disabled={saving}
             >
               {saving ? (
-                <ActivityIndicator color={Colors.white} size="small" />
+                <ActivityIndicator color={colors.textInverse} size="small" />
               ) : (
-                <Text style={styles.primaryBtnText}>
+                <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>
                   {isEditing ? 'Update Routine' : 'Create Routine'}
                 </Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.secondaryBtn}
+              style={[styles.secondaryBtn, { backgroundColor: colors.divider }]}
               onPress={() => goToStep('days')}
             >
-              <Text style={styles.secondaryBtnText}>← Back to Days</Text>
+              <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>← Back to Days</Text>
             </TouchableOpacity>
 
             {isEditing && (
-              <TouchableOpacity style={styles.deleteBtn} onPress={deletePlan}>
-                <Text style={styles.deleteBtnText}>Delete Routine</Text>
+              <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: colors.surface, borderColor: colors.error }]} onPress={deletePlan}>
+                <Text style={[styles.deleteBtnText, { color: colors.error }]}>Delete Routine</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1309,507 +1268,409 @@ export default function CreatePlanScreen({ navigation, route }) {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.offWhite },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.offWhite },
-  loadingText: { ...Typography.bodySmall, color: Colors.textSecondary, marginTop: Spacing.md },
+function makeStyles(theme) {
+  const { colors } = theme;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingText: { ...Typography.bodySmall, marginTop: Spacing.md },
 
-  // ── Header ─────────────────────────────────────────────────────────
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Layout.screenTopPadding,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  headerBack: { ...Typography.bodyMedium, color: Colors.primary, fontWeight: '600' },
-  headerTitle: { ...Typography.h3, color: Colors.black },
+    // ── Header ─────────────────────────────────────────────────────────
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Layout.screenTopPadding,
+      paddingBottom: Spacing.md,
+      borderBottomWidth: 1,
+    },
+    headerBack: { ...Typography.bodyMedium, fontWeight: '600' },
+    headerTitle: { ...Typography.h3 },
 
-  // ── Step Indicator ─────────────────────────────────────────────────
-  stepIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.xl,
-    backgroundColor: Colors.white,
-    gap: Spacing.xs,
-  },
-  stepLine: { height: 2, flex: 1, maxWidth: 40, backgroundColor: Colors.gray200 },
-  stepLineActive: { backgroundColor: Colors.primary },
-  stepDotWrap: { alignItems: 'center' },
-  stepDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.gray200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepDotActive: { backgroundColor: Colors.primary },
-  stepDotDone: { backgroundColor: Colors.primaryLight },
-  stepDotText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '700' },
-  stepDotTextActive: { color: Colors.white },
-  stepLabel: { ...Typography.caption, color: Colors.textMuted, marginTop: 4 },
-  stepLabelActive: { color: Colors.primary, fontWeight: '600' },
+    // ── Step Indicator ─────────────────────────────────────────────────
+    stepIndicator: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Spacing.lg,
+      paddingHorizontal: Spacing.xl,
+      gap: Spacing.xs,
+    },
+    stepLine: { height: 2, flex: 1, maxWidth: 40 },
+    stepDotWrap: { alignItems: 'center' },
+    stepDot: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    stepDotText: { ...Typography.caption, fontWeight: '700' },
+    stepLabel: { ...Typography.caption, marginTop: 4 },
 
-  // ── Scroll ─────────────────────────────────────────────────────────
-  scrollContent: { padding: Spacing.xl },
+    // ── Scroll ─────────────────────────────────────────────────────────
+    scrollContent: { padding: Spacing.xl },
 
-  // ── Section Titles ─────────────────────────────────────────────────
-  sectionTitle: { ...Typography.h3, color: Colors.black, marginBottom: Spacing.sm },
-  sectionSub: { ...Typography.bodySmall, color: Colors.textSecondary, marginBottom: Spacing.lg, lineHeight: 20 },
-  subsectionTitle: { ...Typography.captionMedium, color: Colors.textSecondary, marginTop: Spacing.lg, marginBottom: Spacing.sm },
+    // ── Section Titles ─────────────────────────────────────────────────
+    sectionTitle: { ...Typography.h3, marginBottom: Spacing.sm },
+    sectionSub: { ...Typography.bodySmall, marginBottom: Spacing.lg, lineHeight: 20 },
+    subsectionTitle: { ...Typography.captionMedium, marginTop: Spacing.lg, marginBottom: Spacing.sm },
 
-  // ── Approach Step ──────────────────────────────────────────────────
-  approachCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    marginBottom: Spacing.md,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-  },
-  approachIcon: { fontSize: 28, marginRight: Spacing.lg },
-  approachInfo: { flex: 1 },
-  approachTitle: { ...Typography.h4, color: Colors.black, marginBottom: 4 },
-  approachDesc: { ...Typography.bodySmall, color: Colors.textSecondary, lineHeight: 18 },
-  approachArrow: { fontSize: 24, color: Colors.primary, fontWeight: '700' },
+    // ── Approach Step ──────────────────────────────────────────────────
+    approachCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.xl,
+      marginBottom: Spacing.md,
+      borderWidth: 2,
+    },
+    approachIcon: { fontSize: 28, marginRight: Spacing.lg },
+    approachInfo: { flex: 1 },
+    approachTitle: { ...Typography.h4, marginBottom: 4 },
+    approachDesc: { ...Typography.bodySmall, lineHeight: 18 },
+    approachArrow: { fontSize: 24, fontWeight: '700' },
 
-  templateCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    marginBottom: Spacing.md,
-  },
-  templateHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  templateName: { ...Typography.h4, color: Colors.black },
-  templateDays: {
-    ...Typography.captionMedium,
-    color: Colors.primary,
-    backgroundColor: Colors.primaryBg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-  },
-  templateDesc: { ...Typography.bodySmall, color: Colors.textSecondary, marginBottom: Spacing.md, lineHeight: 18 },
-  templateMuscles: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.md },
-  miniMuscleChip: {
-    backgroundColor: Colors.gray100,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.sm,
-  },
-  miniMuscleText: { ...Typography.caption, color: Colors.textSecondary },
-  templateAction: { ...Typography.captionMedium, color: Colors.primary, fontWeight: '700' },
+    templateCard: {
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.xl,
+      marginBottom: Spacing.md,
+    },
+    templateHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: Spacing.sm,
+    },
+    templateName: { ...Typography.h4 },
+    templateDays: {
+      ...Typography.captionMedium,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 4,
+      borderRadius: BorderRadius.full,
+    },
+    templateDesc: { ...Typography.bodySmall, marginBottom: Spacing.md, lineHeight: 18 },
+    templateMuscles: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginBottom: Spacing.md },
+    miniMuscleChip: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 3,
+      borderRadius: BorderRadius.sm,
+    },
+    miniMuscleText: { ...Typography.caption },
+    templateAction: { ...Typography.captionMedium, fontWeight: '700' },
 
-  // ── Days Step ──────────────────────────────────────────────────────
-  dayChipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing['2xl'],
-  },
-  dayChip: {
-    width: '13%',
-    aspectRatio: 1,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.cardBg,
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dayChipSelected: {
-    backgroundColor: Colors.primaryBg,
-    borderColor: Colors.primaryLight,
-  },
-  dayChipConfigured: {
-    backgroundColor: Colors.primaryBg,
-    borderColor: Colors.success,
-    borderWidth: 2,
-  },
-  dayChipText: { ...Typography.captionMedium, color: Colors.textSecondary },
-  dayChipTextSelected: { color: Colors.primary, fontWeight: '700' },
-  dayChipCheck: { ...Typography.caption, color: Colors.success, marginTop: 2, fontWeight: '700' },
+    // ── Days Step ──────────────────────────────────────────────────────
+    dayChipGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      marginBottom: Spacing['2xl'],
+    },
+    dayChip: {
+      width: '13%',
+      aspectRatio: 1,
+      borderRadius: BorderRadius.md,
+      borderWidth: 2,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    dayChipText: { ...Typography.captionMedium },
+    dayChipCheck: { ...Typography.caption, marginTop: 2, fontWeight: '700' },
 
-  selectedDaysSection: { marginBottom: Spacing.xl },
-  selectedDayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-  },
-  selectedDayRowDone: { borderLeftWidth: 3, borderLeftColor: Colors.success },
-  selectedDayLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  dayDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.gray200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dayDotDone: { backgroundColor: Colors.success },
-  dayDotText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '700' },
-  selectedDayLabel: { ...Typography.bodyMedium, color: Colors.black, fontWeight: '600' },
-  selectedDayRight: { alignItems: 'flex-end' },
-  selectedDaySummary: { ...Typography.caption, color: Colors.textSecondary, marginBottom: 2 },
-  selectedDayAction: { ...Typography.captionMedium, color: Colors.primary, fontWeight: '600' },
+    selectedDaysSection: { marginBottom: Spacing.xl },
+    selectedDayRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: Spacing.lg,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.sm,
+    },
+    selectedDayLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+    dayDot: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    dayDotText: { ...Typography.caption, fontWeight: '700' },
+    selectedDayLabel: { ...Typography.bodyMedium, fontWeight: '600' },
+    selectedDayRight: { alignItems: 'flex-end' },
+    selectedDaySummary: { ...Typography.caption, marginBottom: 2 },
+    selectedDayAction: { ...Typography.captionMedium, fontWeight: '600' },
 
-  // ── Day Config ─────────────────────────────────────────────────────
-  dayProgressBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  dayProgressDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.gray200,
-  },
-  dayProgressDotActive: { backgroundColor: Colors.primary, width: 24, borderRadius: 5 },
-  dayProgressDotDone: { backgroundColor: Colors.success },
+    // ── Day Config ─────────────────────────────────────────────────────
+    dayProgressBar: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.xl,
+    },
+    dayProgressDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    dayProgressDotActive: { width: 24, borderRadius: 5 },
 
-  muscleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  muscleChip: {
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.cardBg,
-    borderWidth: 1.5,
-    borderColor: Colors.gray200,
-  },
-  muscleChipSelected: {
-    backgroundColor: Colors.primaryBg,
-    borderColor: Colors.primary,
-  },
-  muscleChipText: { ...Typography.captionMedium, color: Colors.textSecondary },
-  muscleChipTextSelected: { color: Colors.primary, fontWeight: '700' },
+    muscleGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+    },
+    muscleChip: {
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1.5,
+    },
+    muscleChipText: { ...Typography.captionMedium },
 
-  exerciseItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-  },
-  exerciseItemAdd: {
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderStyle: 'dashed',
-  },
-  exerciseItemAdded: {
-    opacity: 0.5,
-    backgroundColor: Colors.gray100,
-  },
-  exerciseItemLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
-  exerciseItemName: { ...Typography.captionMedium, color: Colors.black, flex: 1 },
-  exerciseItemMeta: { ...Typography.caption, color: Colors.textMuted },
-  exerciseItemAddedText: { color: Colors.textMuted },
-  customBadge: {
-    backgroundColor: Colors.primaryBg,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-  },
-  customBadgeText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
-  removeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.gray100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: Spacing.sm,
-  },
-  removeBtnText: { fontSize: 12, color: Colors.error, fontWeight: '700' },
+    exerciseItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: Spacing.lg,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.sm,
+    },
+    exerciseItemAdd: {
+      borderWidth: 1,
+      borderStyle: 'dashed',
+    },
+    exerciseItemAdded: { opacity: 0.5 },
+    exerciseItemLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
+    exerciseItemName: { ...Typography.captionMedium, flex: 1 },
+    exerciseItemMeta: { ...Typography.caption },
+    customBadge: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.sm,
+    },
+    customBadgeText: { ...Typography.caption, fontWeight: '600' },
+    removeBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: Spacing.sm,
+    },
+    removeBtnText: { fontSize: 12, fontWeight: '700' },
 
-  customAddBtn: {
-    padding: Spacing.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    borderStyle: 'dashed',
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  customAddBtnText: { ...Typography.captionMedium, color: Colors.primary, fontWeight: '600' },
+    customAddBtn: {
+      padding: Spacing.lg,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderRadius: BorderRadius.md,
+      alignItems: 'center',
+      marginTop: Spacing.md,
+    },
+    customAddBtnText: { ...Typography.captionMedium, fontWeight: '600' },
 
-  customInputCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    marginTop: Spacing.md,
-  },
-  customInputRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
-  customInputHalf: { flex: 1 },
-  customInputActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg },
+    customInputCard: {
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.xl,
+      marginTop: Spacing.md,
+    },
+    customInputRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
+    customInputHalf: { flex: 1 },
+    customInputActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg },
 
-  // ── Config Step ───────────────────────────────────────────────────
-  configCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    marginBottom: Spacing.md,
-  },
-  configExName: { ...Typography.captionMedium, color: Colors.black, marginBottom: Spacing.md },
-  configExMuscle: { color: Colors.textMuted },
-  configRow: { flexDirection: 'row', gap: Spacing.sm },
-  configField: { flex: 1, alignItems: 'center' },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.xs },
-  stepperBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.gray100,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepperBtnText: { fontSize: 18, color: Colors.black, fontWeight: '600' },
-  stepperValue: { ...Typography.bodyMedium, color: Colors.black, fontWeight: '700', minWidth: 24, textAlign: 'center' },
+    // ── Config Step ───────────────────────────────────────────────────
+    configCard: {
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.xl,
+      marginBottom: Spacing.md,
+    },
+    configExName: { ...Typography.captionMedium, marginBottom: Spacing.md },
+    configRow: { flexDirection: 'row', gap: Spacing.sm },
+    configField: { flex: 1, alignItems: 'center' },
+    stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.xs },
+    stepperBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    stepperBtnText: { fontSize: 18, fontWeight: '600' },
+    stepperValue: { ...Typography.bodyMedium, fontWeight: '700', minWidth: 24, textAlign: 'center' },
 
-  // ── Muscle sub-progress ───────────────────────────────────────────
-  muscleSubProgress: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing.md,
-    marginTop: Spacing.xl,
-    paddingTop: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  muscleSubDotWrap: { alignItems: 'center', gap: 4 },
-  muscleSubDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.gray200,
-  },
-  muscleSubDotActive: { backgroundColor: Colors.primary },
-  muscleSubDotDone: { backgroundColor: Colors.success },
-  muscleSubLabel: { ...Typography.caption, color: Colors.textMuted },
-  muscleSubLabelActive: { color: Colors.primary, fontWeight: '600' },
+    // ── Muscle sub-progress ───────────────────────────────────────────
+    muscleSubProgress: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: Spacing.md,
+      marginTop: Spacing.xl,
+      paddingTop: Spacing.lg,
+      borderTopWidth: 1,
+    },
+    muscleSubDotWrap: { alignItems: 'center', gap: 4 },
+    muscleSubDot: { width: 8, height: 8, borderRadius: 4 },
+    muscleSubLabel: { ...Typography.caption },
 
-  // ── Review Step ───────────────────────────────────────────────────
-  reviewDayCard: {
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    marginBottom: Spacing.md,
-  },
-  reviewDayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  reviewDayLabel: { ...Typography.h4, color: Colors.black },
-  reviewDayEdit: { ...Typography.captionMedium, color: Colors.primary },
-  reviewDayMuscles: { ...Typography.captionMedium, color: Colors.primary, marginBottom: Spacing.md },
-  reviewExerciseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.xs,
-    paddingLeft: Spacing.sm,
-  },
-  reviewExName: { ...Typography.bodySmall, color: Colors.black, flex: 1 },
-  reviewExConfig: { ...Typography.caption, color: Colors.textSecondary },
+    // ── Review Step ───────────────────────────────────────────────────
+    reviewDayCard: {
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.xl,
+      marginBottom: Spacing.md,
+    },
+    reviewDayHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: Spacing.sm,
+    },
+    reviewDayLabel: { ...Typography.h4 },
+    reviewDayEdit: { ...Typography.captionMedium },
+    reviewDayMuscles: { ...Typography.captionMedium, marginBottom: Spacing.md },
+    reviewExerciseRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: Spacing.xs,
+      paddingLeft: Spacing.sm,
+    },
+    reviewExName: { ...Typography.bodySmall, flex: 1 },
+    reviewExConfig: { ...Typography.caption },
 
-  // ── Day Config Nav ────────────────────────────────────────────────
-  dayConfigNav: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginTop: Spacing['2xl'],
-  },
+    // ── Day Config Nav ────────────────────────────────────────────────
+    dayConfigNav: {
+      flexDirection: 'row',
+      gap: Spacing.md,
+      marginTop: Spacing['2xl'],
+    },
 
-  // ── Buttons ───────────────────────────────────────────────────────
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-  },
-  primaryBtnDim: { opacity: 0.6 },
-  primaryBtnText: { ...Typography.bodyMedium, color: Colors.white, fontWeight: '700' },
-  secondaryBtn: {
-    flex: 1,
-    backgroundColor: Colors.gray100,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-  },
-  secondaryBtnText: { ...Typography.bodyMedium, color: Colors.textSecondary, fontWeight: '600' },
-  saveBtn: { marginTop: Spacing['2xl'] },
-  deleteBtn: {
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.error,
-  },
-  deleteBtnText: { ...Typography.bodyMedium, color: Colors.error, fontWeight: '700' },
+    // ── Buttons ───────────────────────────────────────────────────────
+    primaryBtn: {
+      flex: 1,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      marginTop: Spacing.lg,
+    },
+    primaryBtnDim: { opacity: 0.6 },
+    primaryBtnText: { ...Typography.bodyMedium, fontWeight: '700' },
+    secondaryBtn: {
+      flex: 1,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      marginTop: Spacing.lg,
+    },
+    secondaryBtnText: { ...Typography.bodyMedium, fontWeight: '600' },
+    saveBtn: { marginTop: Spacing['2xl'] },
+    deleteBtn: {
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      marginTop: Spacing.lg,
+      borderWidth: 1.5,
+    },
+    deleteBtnText: { ...Typography.bodyMedium, fontWeight: '700' },
 
-  addBtn: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-  },
-  addBtnDisabled: { opacity: 0.5 },
-  addBtnText: { ...Typography.captionMedium, color: Colors.white, fontWeight: '700' },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: Colors.gray100,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-  },
-  cancelBtnText: { ...Typography.captionMedium, color: Colors.textSecondary },
+    addBtn: {
+      flex: 1,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.md,
+      alignItems: 'center',
+    },
+    addBtnDisabled: { opacity: 0.5 },
+    addBtnText: { ...Typography.captionMedium, fontWeight: '700' },
+    cancelBtn: {
+      flex: 1,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.md,
+      alignItems: 'center',
+    },
+    cancelBtnText: { ...Typography.captionMedium },
 
-  // ── Inputs ────────────────────────────────────────────────────────
-  textInput: {
-    ...Typography.bodyMedium,
-    backgroundColor: Colors.cardBg,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.lg,
-    color: Colors.black,
-    marginTop: Spacing.xs,
-  },
-  textInputSmall: {
-    ...Typography.captionMedium,
-    backgroundColor: Colors.cardBg,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.sm,
-    color: Colors.black,
-    textAlign: 'center',
-    marginTop: Spacing.xs,
-  },
-  inputLabel: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
-  emptyText: { ...Typography.bodySmall, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.xl },
+    // ── Inputs ────────────────────────────────────────────────────────
+    textInput: {
+      ...Typography.bodyMedium,
+      borderWidth: 1,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      marginTop: Spacing.xs,
+    },
+    textInputSmall: {
+      ...Typography.captionMedium,
+      borderWidth: 1,
+      borderRadius: BorderRadius.sm,
+      padding: Spacing.sm,
+      textAlign: 'center',
+      marginTop: Spacing.xs,
+    },
+    inputLabel: { ...Typography.caption, fontWeight: '600' },
+    emptyText: { ...Typography.bodySmall, textAlign: 'center', marginTop: Spacing.xl },
 
-  // ── Mode Selection ──────────────────────────────────────────
-  modeGrid: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  modeCard: {
-    flex: 1,
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-  },
-  modeCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryBg,
-  },
-  modeIcon: { fontSize: 32, marginBottom: Spacing.sm },
-  modeTitle: { ...Typography.captionMedium, color: Colors.textPrimary, fontWeight: '700', marginBottom: 4 },
-  modeTitleSelected: { color: Colors.primary },
-  modeDesc: { ...Typography.caption, color: Colors.textMuted, textAlign: 'center' },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
+    // ── Mode Selection ──────────────────────────────────────────
+    modeGrid: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+    },
+    modeCard: {
+      flex: 1,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      borderWidth: 2,
+    },
+    modeIcon: { fontSize: 32, marginBottom: Spacing.sm },
+    modeTitle: { ...Typography.captionMedium, fontWeight: '700', marginBottom: 4 },
+    modeDesc: { ...Typography.caption, textAlign: 'center' },
+    textArea: {
+      minHeight: 80,
+      textAlignVertical: 'top',
+    },
 
-  // ── Routine Type Selection ────────────────────────────────────
-  routineTypeRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  routineTypeCard: {
-    flex: 1,
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-  },
-  routineTypeCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryBg,
-  },
-  routineTypeCardDisabled: {
-    opacity: 0.5,
-    borderColor: Colors.gray200,
-  },
-  routineTypeIcon: { fontSize: 28, marginBottom: Spacing.xs },
-  routineTypeTitle: { ...Typography.captionMedium, color: Colors.textPrimary, fontWeight: '700', marginBottom: 4 },
-  routineTypeTitleSelected: { color: Colors.primary },
-  routineTypeDesc: { ...Typography.caption, color: Colors.textMuted, textAlign: 'center' },
-  routineTypeLimit: { ...Typography.caption, color: Colors.error, fontWeight: '600', marginTop: 4 },
+    // ── Routine Type Selection ────────────────────────────────────
+    routineTypeRow: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+    },
+    routineTypeCard: {
+      flex: 1,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      borderWidth: 2,
+    },
+    routineTypeCardDisabled: { opacity: 0.5 },
+    routineTypeIcon: { fontSize: 28, marginBottom: Spacing.xs },
+    routineTypeTitle: { ...Typography.captionMedium, fontWeight: '700', marginBottom: 4 },
+    routineTypeDesc: { ...Typography.caption, textAlign: 'center' },
+    routineTypeLimit: { ...Typography.caption, fontWeight: '600', marginTop: 4 },
 
-  // ── Limit Info ──────────────────────────────────────────────────
-  limitInfoRow: {
-    backgroundColor: Colors.gray100,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-    alignItems: 'center',
-  },
-  limitInfoText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600' },
+    // ── Limit Info ──────────────────────────────────────────────────
+    limitInfoRow: {
+      borderRadius: BorderRadius.sm,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      marginBottom: Spacing.md,
+      alignItems: 'center',
+    },
+    limitInfoText: { ...Typography.caption, fontWeight: '600' },
 
-  // ── Week Picker ───────────────────────────────────────────────
-  weekPickerSection: { marginTop: Spacing.md },
-  weekPickerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  weekChip: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: Colors.cardBg,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    borderWidth: 1.5,
-    borderColor: Colors.gray200,
-    alignItems: 'center',
-  },
-  weekChipSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryBg,
-  },
-  weekChipLabel: { ...Typography.captionMedium, color: Colors.textPrimary, fontWeight: '600', marginBottom: 2 },
-  weekChipLabelSelected: { color: Colors.primary },
-  weekChipDate: { ...Typography.caption, color: Colors.textMuted, fontSize: 11 },
-  weekChipDateSelected: { color: Colors.primary },
-});
+    // ── Week Picker ───────────────────────────────────────────────
+    weekPickerSection: { marginTop: Spacing.md },
+    weekPickerRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      marginTop: Spacing.sm,
+    },
+    weekChip: {
+      flex: 1,
+      minWidth: '45%',
+      borderRadius: BorderRadius.md,
+      padding: Spacing.md,
+      borderWidth: 1.5,
+      alignItems: 'center',
+    },
+    weekChipLabel: { ...Typography.captionMedium, fontWeight: '600', marginBottom: 2 },
+    weekChipDate: { ...Typography.caption, fontSize: 11 },
+  });
+}

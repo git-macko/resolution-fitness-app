@@ -22,7 +22,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import Card from './Card';
-import Colors from '../theme/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius } from '../theme/spacing';
 
@@ -60,7 +60,6 @@ const MUSCLE_COLORS = {
   arms:     '#8B5CF6',
   core:     '#14B8A6',
   cardio:   '#EC4899',
-  all:      Colors.primary,
 };
 
 /** Low-opacity wash backgrounds for the muscle-group pills / placeholders. */
@@ -72,7 +71,6 @@ const MUSCLE_WASHES = {
   arms:     '#F5F3FF', // violet-50
   core:     '#F0FDFA', // teal-50
   cardio:   '#FDF2F8', // pink-50
-  all:      Colors.primaryBg,
 };
 
 /** Emoji icons used as exercise image placeholders per muscle group. */
@@ -128,6 +126,8 @@ export default function ExerciseLibrary({
   limit = 20,
   emptyMessage = defaultEmptyMessage,
 }) {
+  const { colors } = useTheme();
+
   // Filtered + limited list for the currently selected group.
   const items = useMemo(() => {
     const list =
@@ -136,6 +136,10 @@ export default function ExerciseLibrary({
         : exercises.filter((ex) => ex.muscleGroup === selectedGroup);
     return list.slice(0, limit);
   }, [exercises, selectedGroup, limit]);
+
+  // Fallback accent/wash for unknown muscle groups
+  const allAccent = colors.accent;
+  const allWash = colors.accentBg;
 
   return (
     <>
@@ -148,14 +152,27 @@ export default function ExerciseLibrary({
       >
         {muscleGroups.map((group) => {
           const active = selectedGroup === group;
+          const accent = MUSCLE_COLORS[group] || allAccent;
           return (
             <TouchableOpacity
               key={group}
-              style={[styles.chip, active && styles.chipActive]}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: active ? accent : colors.surface,
+                  borderColor: active ? accent : colors.border,
+                },
+              ]}
               onPress={() => onSelectGroup(group)}
             >
               <Text
-                style={[styles.chipText, active && styles.chipTextActive]}
+                style={[
+                  styles.chipText,
+                  {
+                    color: active ? colors.textInverse : colors.textSecondary,
+                    fontWeight: active ? '600' : '400',
+                  },
+                ]}
               >
                 {group.charAt(0).toUpperCase() + group.slice(1)}
               </Text>
@@ -166,7 +183,7 @@ export default function ExerciseLibrary({
 
       {/* ── Carousel ───────────────────────────────────────── */}
       {items.length === 0 ? (
-        <Text style={styles.emptyText}>
+        <Text style={[styles.emptyText, { color: colors.textMuted }]}>
           {emptyMessage(selectedGroup)}
         </Text>
       ) : (
@@ -180,9 +197,9 @@ export default function ExerciseLibrary({
         >
           {items.map((ex) => {
             const accent =
-              MUSCLE_COLORS[ex.muscleGroup] || MUSCLE_COLORS.all;
+              MUSCLE_COLORS[ex.muscleGroup] || allAccent;
             const wash =
-              MUSCLE_WASHES[ex.muscleGroup] || MUSCLE_WASHES.all;
+              MUSCLE_WASHES[ex.muscleGroup] || allWash;
             const icon =
               MUSCLE_ICONS[ex.muscleGroup] || MUSCLE_ICONS.all;
             return (
@@ -196,6 +213,7 @@ export default function ExerciseLibrary({
                   imageUrl={ex.imageUrl}
                   wash={wash}
                   icon={icon}
+                  colors={colors}
                 />
 
                 {/* Colored accent bar below image */}
@@ -221,12 +239,12 @@ export default function ExerciseLibrary({
                 </View>
 
                 {/* Exercise name */}
-                <Text style={styles.exName} numberOfLines={2}>
+                <Text style={[styles.exName, { color: colors.textPrimary }]} numberOfLines={2}>
                   {ex.name}
                 </Text>
 
                 {/* Equipment meta */}
-                <Text style={styles.exMeta}>{ex.equipment}</Text>
+                <Text style={[styles.exMeta, { color: colors.textMuted }]}>{ex.equipment}</Text>
               </Card>
             );
           })}
@@ -240,7 +258,7 @@ export default function ExerciseLibrary({
  * Small inner component that handles its own image-load error state.
  * If the remote image fails to load, it falls back to the emoji placeholder.
  */
-function ExerciseCardImage({ imageUrl, wash, icon }) {
+function ExerciseCardImage({ imageUrl, wash, icon, colors }) {
   const [failed, setFailed] = useState(false);
   const hasImage = !!imageUrl && !failed;
 
@@ -255,7 +273,7 @@ function ExerciseCardImage({ imageUrl, wash, icon }) {
   return (
     <Image
       source={{ uri: imageUrl }}
-      style={styles.cardImage}
+      style={[styles.cardImage, { backgroundColor: colors.divider }]}
       resizeMode="cover"
       onError={() => setFailed(true)}
     />
@@ -274,22 +292,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.cardBg,
     marginRight: Spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
   chipText: {
     ...Typography.caption,
-    color: Colors.textSecondary,
-  },
-  chipTextActive: {
-    color: Colors.white,
-    fontWeight: '600',
   },
 
   // ── Carousel ──
@@ -309,7 +316,6 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: 88,
-    backgroundColor: Colors.gray100,
   },
   imagePlaceholder: {
     width: '100%',
@@ -344,7 +350,6 @@ const styles = StyleSheet.create({
   },
   exName: {
     ...Typography.captionMedium,
-    color: Colors.textPrimary,
     fontWeight: '700',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
@@ -352,7 +357,6 @@ const styles = StyleSheet.create({
   },
   exMeta: {
     ...Typography.caption,
-    color: Colors.textMuted,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xs,
     paddingBottom: Spacing.lg,
@@ -361,7 +365,6 @@ const styles = StyleSheet.create({
   // ── Empty state ──
   emptyText: {
     ...Typography.bodySmall,
-    color: Colors.textMuted,
     textAlign: 'center',
     marginTop: Spacing.xl,
   },

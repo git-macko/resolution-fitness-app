@@ -185,7 +185,7 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := fetchSettingsByUserID(userID)
 	if err != nil {
 		// Create default settings if they don't exist
-		database.DB.Exec("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", userID)
+		database.DB.Exec("INSERT OR IGNORE INTO user_settings (user_id, created_at, updated_at) VALUES (?, datetime('now'), datetime('now'))", userID)
 		settings, _ = fetchSettingsByUserID(userID)
 	}
 
@@ -194,6 +194,7 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 
 // UpdateSettings handles PUT /api/profile/settings.
 // Updates the authenticated user's app preferences.
+// Gym preferences are managed through the dedicated /api/profile/gym endpoint.
 func UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	userID := GetUserID(r)
 	if userID == "" {
@@ -248,15 +249,6 @@ func UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		query += ", theme = ?"
 		args = append(args, req.Theme)
 	}
-	if req.AiModel != "" {
-		query += ", ai_model = ?"
-		args = append(args, req.AiModel)
-	}
-	if req.OpenAIKey != "" {
-		query += ", openai_api_key_enc = ?"
-		args = append(args, req.OpenAIKey) // In production, encrypt this!
-	}
-
 	query += " WHERE user_id = ?"
 	args = append(args, userID)
 
@@ -414,20 +406,21 @@ func fetchUserByID(userID string) (*models.User, error) {
 func fetchSettingsByUserID(userID string) (*models.UserSettings, error) {
 	var settings models.UserSettings
 	var notificationsInt int
-	var emptyOpenAI string
 
 	err := database.DB.QueryRow(`
 		SELECT user_id, units, notifications, workout_reminder_time,
 		       rest_timer_seconds, weekly_workout_goal, calorie_target,
-		       protein_target_grams, water_goal_ml, theme, ai_model,
-		       COALESCE(openai_api_key_enc, ''),
+		       protein_target_grams, water_goal_ml, theme,
+		       COALESCE(gym_type, ''), COALESCE(gym_name, ''), COALESCE(gym_address, ''),
+		       COALESCE(gym_place_id, ''), COALESCE(gym_lat, 0), COALESCE(gym_lng, 0), COALESCE(gym_capacity, 150), COALESCE(gym_opening_hours, ''),
 		       created_at, updated_at
 		FROM user_settings WHERE user_id = ?
 	`, userID).Scan(
 		&settings.UserID, &settings.Units, &notificationsInt, &settings.WorkoutReminderTime,
 		&settings.RestTimerSeconds, &settings.WeeklyWorkoutGoal, &settings.CalorieTarget,
-		&settings.ProteinTargetGrams, &settings.WaterGoalMl, &settings.Theme, &settings.AiModel,
-		&emptyOpenAI,
+		&settings.ProteinTargetGrams, &settings.WaterGoalMl, &settings.Theme,
+		&settings.GymType, &settings.GymName, &settings.GymAddress,
+		&settings.GymPlaceID, &settings.GymLat, &settings.GymLng, &settings.GymCapacity, &settings.GymOpeningHours,
 		&settings.CreatedAt, &settings.UpdatedAt,
 	)
 	if err != nil {
@@ -435,7 +428,6 @@ func fetchSettingsByUserID(userID string) (*models.UserSettings, error) {
 	}
 
 	settings.Notifications = notificationsInt == 1
-	_ = emptyOpenAI // not exposed to client
 	return &settings, nil
 }
 

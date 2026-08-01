@@ -51,6 +51,9 @@ func GetDashboard(w http.ResponseWriter, r *http.Request) {
 	// ── 9. Streak Info ────────────────────────────────────────────
 	dashboard.StreakInfo = fetchStreakInfo(userID)
 
+	// ── 10. Gym Crowd ─────────────────────────────────────────────
+	dashboard.GymCrowd, _ = fetchGymCrowd(userID)
+
 	utils.WriteSuccess(w, dashboard, "Dashboard loaded")
 }
 
@@ -326,6 +329,70 @@ func fetchStreakInfo(userID string) models.StreakInfo {
 		CurrentStreak: streak,
 		Last7Days:     calendarDays,
 	}
+}
+
+// ── Standalone Quote & Fact Endpoints ────────────────────────────────
+
+// GetRandomQuote handles GET /api/quotes.
+// Returns a random motivational quote, different on every call.
+// Pass ?exclude=<id> to avoid getting the same quote twice in a row.
+func GetRandomQuote(w http.ResponseWriter, r *http.Request) {
+	excludeID := r.URL.Query().Get("exclude")
+
+	var quote models.DailyQuote
+	var err error
+
+	if excludeID != "" {
+		err = database.DB.QueryRow(`
+			SELECT id, text, COALESCE(author, 'Unknown'), COALESCE(category, 'motivation')
+			FROM daily_quotes WHERE is_active = 1 AND id != ? ORDER BY RANDOM() LIMIT 1
+		`, excludeID).Scan(&quote.ID, &quote.Text, &quote.Author, &quote.Category)
+	} else {
+		err = database.DB.QueryRow(`
+			SELECT id, text, COALESCE(author, 'Unknown'), COALESCE(category, 'motivation')
+			FROM daily_quotes WHERE is_active = 1 ORDER BY RANDOM() LIMIT 1
+		`).Scan(&quote.ID, &quote.Text, &quote.Author, &quote.Category)
+	}
+
+	if err != nil {
+		quote = models.DailyQuote{
+			Text: "The only bad workout is the one that didn't happen.",
+			Author: "Unknown", Category: "motivation",
+		}
+	}
+
+	utils.WriteSuccess(w, quote, "Quote loaded")
+}
+
+// GetRandomFact handles GET /api/facts.
+// Returns a random health/gym fact, different on every call.
+// Pass ?exclude=<id> to avoid getting the same fact twice in a row.
+func GetRandomFact(w http.ResponseWriter, r *http.Request) {
+	excludeID := r.URL.Query().Get("exclude")
+
+	var fact models.HealthFact
+	var err error
+
+	if excludeID != "" {
+		err = database.DB.QueryRow(`
+			SELECT id, text, COALESCE(category, 'nutrition'), COALESCE(source, '')
+			FROM health_facts WHERE is_active = 1 AND id != ? ORDER BY RANDOM() LIMIT 1
+		`, excludeID).Scan(&fact.ID, &fact.Text, &fact.Category, &fact.Source)
+	} else {
+		err = database.DB.QueryRow(`
+			SELECT id, text, COALESCE(category, 'nutrition'), COALESCE(source, '')
+			FROM health_facts WHERE is_active = 1 ORDER BY RANDOM() LIMIT 1
+		`).Scan(&fact.ID, &fact.Text, &fact.Category, &fact.Source)
+	}
+
+	if err != nil {
+		fact = models.HealthFact{
+			Text: "Your muscles continue to burn calories for up to 48 hours after a workout.",
+			Category: "exercise_science", Source: "Journal of Sports Science",
+		}
+	}
+
+	utils.WriteSuccess(w, fact, "Fact loaded")
 }
 
 // Ensure json is used

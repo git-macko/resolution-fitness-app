@@ -254,6 +254,29 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	plan, err := createWeeklyPlan(userID, req)
+	if err != nil {
+		// Map known creation errors to HTTP status codes.
+		switch err.Error() {
+		case "consistent limit reached":
+			utils.WriteError(w, http.StatusConflict, "You can only have up to 2 routines. Delete an existing one to create a new one.")
+		case "one_time limit reached":
+			utils.WriteError(w, http.StatusConflict, "You can only have up to 3 one-time overrides. Delete or wait for one to expire.")
+		case "one_time date collision":
+			utils.WriteError(w, http.StatusConflict, "You already have a one-time plan scheduled for that week. Choose a different week or delete the existing one.")
+		default:
+			utils.WriteError(w, http.StatusInternalServerError, "Failed to create plan")
+		}
+		return
+	}
+
+	utils.WriteCreated(w, plan, "Plan created")
+}
+
+// createWeeklyPlan creates and persists a weekly plan for a user.
+// It enforces plan limits and returns the fully populated WeeklyPlan.
+// This helper is shared between the REST endpoint and the chat plan flow.
+func createWeeklyPlan(userID string, req models.CreatePlanRequest) (*models.WeeklyPlan, error) {
 	// ── Normalize routine type ────────────────────────────────────
 	routineType := req.RoutineType
 	if routineType != "one_time" {
@@ -272,8 +295,7 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 	} else {
 		t, ok := utils.ParseDate(weekStart)
 		if !ok {
-			utils.WriteError(w, http.StatusBadRequest, "Invalid week start date")
-			return
+			return nil, fmt.Errorf("invalid week start date")
 		}
 		weekEnd = utils.EndOfWeek(t).Format("2006-01-02")
 	}
@@ -281,8 +303,7 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 	// ── Transaction: check limits + insert atomically ─────────────
 	tx, err := database.DB.Begin()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to start transaction")
-		return
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -291,15 +312,26 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 		var count int
 		tx.QueryRow("SELECT COUNT(*) FROM weekly_plans WHERE user_id = ? AND routine_type = 'consistent'", userID).Scan(&count)
 		if count >= 2 {
-			utils.WriteError(w, http.StatusConflict, "You can only have up to 2 routines. Delete an existing one to create a new one.")
-			return
+			return nil, fmt.Errorf("consistent limit reached")
 		}
 	} else {
 		var count int
 		tx.QueryRow("SELECT COUNT(*) FROM weekly_plans WHERE user_id = ? AND routine_type = 'one_time'", userID).Scan(&count)
 		if count >= 3 {
-			utils.WriteError(w, http.StatusConflict, "You can only have up to 3 one-time overrides. Delete or wait for one to expire.")
-			return
+			return nil, fmt.Errorf("one_time limit reached")
+		}
+
+		// ── Prevent overlapping one-time overrides dates ────────────
+		// A one-time plan covers a specific week. Reject creation if the
+		// requested week overlaps an existing one-time plan's week.
+		var overlap int
+		tx.QueryRow(`
+			SELECT COUNT(*) FROM weekly_plans
+			WHERE user_id = ? AND routine_type = 'one_time'
+			  AND week_start_date <= ? AND week_end_date >= ?
+		`, userID, weekEnd, weekStart).Scan(&overlap)
+		if overlap > 0 {
+			return nil, fmt.Errorf("one_time date collision")
 		}
 	}
 
@@ -320,13 +352,11 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
 	`, planID, userID, weekStart, weekEnd, req.Name, req.Mode, req.ModeGoal, routineType, isActive)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to create plan")
-		return
+		return nil, fmt.Errorf("failed to create plan: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to commit plan")
-		return
+		return nil, fmt.Errorf("failed to commit plan: %w", err)
 	}
 
 	// ── Create plan days (outside transaction — safe to do after commit) ──
@@ -334,8 +364,7 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 		createPlanDay(planID, day, i)
 	}
 
-	plan, _ := fetchPlanByID(planID, userID)
-	utils.WriteCreated(w, plan, "Plan created")
+	return fetchPlanByID(planID, userID)
 }
 
 // UpdatePlan handles PUT /api/plans/{planId}.
@@ -566,15 +595,25 @@ func StartWorkout(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	today := utils.TodayString()
 
+	// Require workout name for ad-hoc workouts
+	if req.PlanDayID == "" && req.WorkoutName == "" {
+		utils.WriteError(w, http.StatusBadRequest, "Workout name is required for ad-hoc workouts")
+		return
+	}
+
 	// Start from plan day if provided
 	if req.PlanDayID != "" {
-		// Get plan day details
+		// Get plan day details — validate the plan day exists
 		var planID, workoutName string
 		var estimatedDuration int
-		database.DB.QueryRow(`
+		err := database.DB.QueryRow(`
 			SELECT plan_id, workout_name, estimated_duration
 			FROM plan_days WHERE id = ?
 		`, req.PlanDayID).Scan(&planID, &workoutName, &estimatedDuration)
+		if err != nil {
+			utils.WriteError(w, http.StatusNotFound, "Plan day not found")
+			return
+		}
 
 		database.DB.Exec(`
 			INSERT INTO workout_sessions (id, user_id, plan_id, plan_day_id, workout_name, date, created_at)
@@ -591,7 +630,11 @@ func StartWorkout(w http.ResponseWriter, r *http.Request) {
 		`, sessionID, userID, req.WorkoutName, today, now)
 	}
 
-	session, _ := fetchWorkoutSession(sessionID, userID)
+	session, err := fetchWorkoutSession(sessionID, userID)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to retrieve created workout session")
+		return
+	}
 	utils.WriteCreated(w, session, "Workout started")
 }
 
@@ -1080,6 +1123,8 @@ func fetchSessionSets(sessionExerciseID string) []models.SessionSet {
 
 // copyPlanExercisesToSession copies exercises from a plan day into a workout session.
 // Handles both library exercises (JOIN exercises table) and custom exercises (fallback to custom_exercise_name).
+// Collects all plan exercise data first (closing the read result set) before inserting into
+// session_exercises to avoid SQLITE_BUSY from concurrent read+write on the same *sql.DB.
 func copyPlanExercisesToSession(sessionID, planDayID string) {
 	rows, err := database.DB.Query(`
 		SELECT pe.exercise_id, pe.custom_exercise_name,
@@ -1095,31 +1140,38 @@ func copyPlanExercisesToSession(sessionID, planDayID string) {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+
+	// Collect all rows into a slice before closing to release the read lock,
+	// so subsequent Exec calls don't hit SQLITE_BUSY.
+	type planExerciseData struct {
+		exID, exName, muscleGroup, targetReps, notes string
+		targetSets                                     int
+		targetWeight                                   float64
+	}
+	var exercises []planExerciseData
+	for rows.Next() {
+		var d planExerciseData
+		rows.Scan(&d.exID, new(string), &d.exName, &d.muscleGroup,
+			&d.targetSets, &d.targetReps, &d.targetWeight, new(int), &d.notes)
+		exercises = append(exercises, d)
+	}
+	rows.Close()
 
 	sortOrder := 0
-	for rows.Next() {
-		var exID, customName, exName, muscleGroup, targetReps string
-		var targetSets int
-		var targetWeight float64
-		var notes string
-		var planSortOrder int
-		rows.Scan(&exID, &customName, &exName, &muscleGroup, &targetSets, &targetReps, &targetWeight, &planSortOrder, &notes)
-
-		// Use custom exercise name if it's a custom exercise (no real exercise_id)
+	for _, d := range exercises {
 		sessionExID := uuid.New().String()
 		database.DB.Exec(`
 			INSERT INTO session_exercises (id, session_id, exercise_id, exercise_name, muscle_group, sort_order, notes)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, sessionExID, sessionID, exID, exName, muscleGroup, sortOrder, notes)
+		`, sessionExID, sessionID, d.exID, d.exName, d.muscleGroup, sortOrder, d.notes)
 
 		// Create empty sets based on target_sets
-		for i := 1; i <= targetSets; i++ {
+		for i := 1; i <= d.targetSets; i++ {
 			setID := uuid.New().String()
 			database.DB.Exec(`
 				INSERT INTO session_sets (id, session_exercise_id, set_number, weight_kg, reps, rest_seconds)
 				VALUES (?, ?, ?, ?, 0, 60)
-			`, setID, sessionExID, i, targetWeight)
+			`, setID, sessionExID, i, d.targetWeight)
 		}
 		sortOrder++
 	}

@@ -48,7 +48,12 @@ Configure the backend URL in `mobile/src/api/config.js`.
 
 ```bash
 cd Resolution-fitnessapp/backend
-go test ./... -v
+go test ./... -v   # 37 tests (workouts, chat, gym)
+```
+
+```bash
+cd Resolution-fitnessapp/mobile
+npx jest            # 20 tests (theme utils, screens)
 ```
 
 ---
@@ -76,8 +81,16 @@ go test ./... -v
 - Streak tracking (current & longest)
 - Weekly workout completion rate
 
+### 🕒 Gym — Crowd & Opening Hours
+- Gym selection with autocomplete (Google Places when configured, Nominatim fallback)
+- Live crowd estimates (BestTime API, community reports, or time-of-day simulation)
+- Opening-hours enrichment (Google Places / Overpass) with open/closed status
+- 1–5 crowd level reporting with community aggregation
+
 ### 🥗 Health — Food Scanner & Nutrition
-- **Food photo analysis** via OpenAI Vision API
+- **Food photo analysis** via Google Gemini Vision API
+- Ingredient breakdown, health score, and allergen flags per scan
+- Scan history with saved analyses
 - Daily nutrition dashboard with macro tracking
 - Preworkout / Postworkout / General meal categorization
 - Water intake tracker
@@ -91,7 +104,8 @@ go test ./... -v
 
 ### 🤖 AI Coach
 - Chat with context-aware AI (goals, allergies, recent workouts)
-- Message history persistence
+- Streaming responses (SSE) + natural-language plan generation
+- Message history persistence with per-message delete
 - Suggested prompts
 - Flows through Go backend for user context injection
 
@@ -112,7 +126,7 @@ go test ./... -v
 | **Frontend** | React Native, Expo SDK 54, React Navigation v7 |
 | **Auth** | JWT (`golang-jwt/jwt/v5`) with 72h expiry |
 | **Database** | SQLite (WAL mode, foreign keys ON) |
-| **AI** | OpenAI GPT-4o (chat) + Vision API (food scan) |
+| **AI** | Google Gemini (chat + food scan) |
 | **Testing** | Go `testing` package, in-memory SQLite |
 
 ---
@@ -130,20 +144,19 @@ Resolution-fitnessapp/
 │   ├── models/                 # Data structures
 │   ├── utils/                  # Response helpers, validation, dates
 │   ├── Makefile                # Build / test / run targets
-│   └── handlers/workouts_test.go  # 16 unit tests
+│   └── handlers/*_test.go      # 37 unit + integration tests (workouts, chat, gym)
 │
 ├── mobile/                     # React Native (Expo)
 │   ├── App.js                  # Root entry (splash + theme + auth providers)
 │   └── src/
 │       ├── api/                # HTTP client + config
-│       ├── components/         # Reusable UI (Card, ExerciseLibrary, HeroCard, Logo, etc.)
+│       ├── components/         # Reusable UI (Card, ExerciseLibrary, GymCrowdCard, HeroCard, etc.)
 │       ├── contexts/           # AuthContext, ThemeContext
 │       ├── navigation/         # Tab + stack navigators
-│       ├── screens/            # 13 screens + __tests__
-│       ├── theme/              # colors, typography, spacing, card, themes, outlineText
-│       └── utils/              # dates, usePressScale
+│       ├── screens/            # 14 screens + __tests__
+│       ├── theme/              # typography, spacing, card, themes, outlineText
+│       └── utils/              # dates, openingHours, usePressScale
 │
-├── scripts/                    # LAN IP update helpers
 └── PROMPT.md                   # Full project overview
 ```
 
@@ -159,7 +172,8 @@ Resolution-fitnessapp/
 | Nutrition | `GET /api/nutrition/daily`, `POST /api/nutrition/meals` |
 | Food Scan | `POST /api/food-scan` (photo → AI analysis) |
 | Dashboard | `GET /api/dashboard` (aggregated data) |
-| Chat | `POST /api/chat` (AI Coach) |
+| Gym | `GET /api/gym-crowd`, `POST /api/gym-crowd/report` |
+| Chat | `POST /api/chat` (AI Coach), `POST /api/chat/stream` (SSE) |
 
 Full API reference in [PROMPT.md](PROMPT.md).
 
@@ -172,4 +186,4 @@ Full API reference in [PROMPT.md](PROMPT.md).
 - **Progression reset on active switch** — XP/level/streak tied to routine consistency
 - **Cascade cleanup** — deleting a plan removes all linked sessions/days/exercises
 - **Consistent API shape** — all responses follow `{ data, message }` or `{ error }`
-- **Theme system** — purple (#7C3AED) accent on monochrome foundation with light/dark mode support
+- **Theme system** — orange (#EA580C) accent on monochrome foundation with light/dark mode support

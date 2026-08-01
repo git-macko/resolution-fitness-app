@@ -11,8 +11,9 @@
 //   Web               → LAN_IP:8080
 //
 // ── Before Each Session ──────────────────────────────────────
-// 1. Run:  bash scripts/update-lan-ip.sh
-//    This auto-detects your LAN IP and updates YOUR_LAN_IP below.
+// 1. Edit YOUR_LAN_IP below to your PC's current LAN IPv4.
+//    Find it with:  ipconfig   (Windows → look for "IPv4 Address")
+//                   ifconfig   (macOS / Linux)
 // 2. Start backend:  cd backend && go run .
 // 3. Start Expo:     npx expo start --clear
 // 4. Scan QR code with Expo Go or press 'a' for Android emulator
@@ -25,8 +26,9 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 
-// ── 1. Your computer's LAN IP (auto-updated by update-lan-ip.sh) ──
-const YOUR_LAN_IP = '192.168.88.7';
+// ── 1. Your computer's LAN IP — edit this manually when it changes ──
+// (Your router hands out short DHCP leases, so this rotates.)
+const YOUR_LAN_IP = '192.168.1.11';
 
 // ── 2. Backend port ──
 const BACKEND_PORT = '8080';

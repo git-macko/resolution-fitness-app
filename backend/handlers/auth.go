@@ -10,6 +10,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -98,15 +99,24 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	// ── Step 6: Create default settings ───────────────────────────
 	// Every new user gets sensible defaults for all preferences.
-	_, _ = database.DB.Exec(`
-		INSERT INTO user_settings (user_id) VALUES (?)
-	`, userID)
+	// Errors are logged (not swallowed) so a missing settings row -
+	// which would prevent the gym crowd card and other settings-driven
+	// widgets from ever appearing for that user - is surfaced during
+	// registration. Worst case the row will be lazy-seeded on demand
+	// by fetchUserGym / fetchSettingsByUserID, so we fall back here.
+	if _, err := database.DB.Exec(`
+		INSERT INTO user_settings (user_id, created_at, updated_at) VALUES (?, datetime('now'), datetime('now'))
+	`, userID); err != nil {
+		log.Printf("[auth] failed to seed default user_settings for new user %s: %v", userID, err)
+	}
 
 	// ── Step 7: Create initial stats record ───────────────────────
-	_, _ = database.DB.Exec(`
+	if _, err := database.DB.Exec(`
 		INSERT INTO user_stats (user_id, fitness_level, fitness_xp)
 		VALUES (?, 1, 0)
-	`, userID)
+	`, userID); err != nil {
+		log.Printf("[auth] failed to seed default user_stats for new user %s: %v", userID, err)
+	}
 
 	// ── Step 8: Generate JWT token ────────────────────────────────
 	token, err := generateToken(userID)

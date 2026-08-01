@@ -1,13 +1,21 @@
 # ── Expo ────────────────────────────────────────────────────────────
+.expo/
 mobile/.expo/
 mobile/node_modules/
 mobile/dist/
 
 # ── Go backend ─────────────────────────────────────────────────────
 backend/resolution-server
+backend/resolution-server.exe
 backend/*.exe
-backend/server.log
+backend/server-test*
+backend/backend-test-build
+backend/*.log
 backend/uploads/
+backend/handlers/uploads/
+
+# ── Runtime / process artifacts ────────────────────────────────────
+*.pid
 
 # ── SQLite ─────────────────────────────────────────────────────────
 *.db

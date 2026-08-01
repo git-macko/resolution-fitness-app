@@ -1,6 +1,6 @@
 // Resolution Fitness App — Settings Screen
 // User preferences: units, notifications, rest timer, weekly goals,
-// targets, theme, AI model.
+// targets, and theme. (AI model is locked to gemini-3.5-flash server-side.)
 //
 // The "Theme" row now drives a LOCAL state override through the
 // theme context — the picker flips the UI in real time.
@@ -12,10 +12,12 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, Switch,
 } from 'react-native';
+import AutocompleteInput from '../components/AutocompleteInput';
 import api from '../api/client';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows } from '../theme/spacing';
+import { formatTodayHours } from '../utils/openingHours';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light' },
@@ -28,6 +30,7 @@ export default function SettingsScreen() {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [fetchingDetails, setFetchingDetails] = useState(false);
 
   // Must be defined BEFORE the loading early-return — the loading view
   // references styles.loadingContainer.
@@ -40,7 +43,9 @@ export default function SettingsScreen() {
   const fetchSettings = async () => {
     try {
       const data = await api.getSettings();
-      setSettings(data.data || data || {});
+      const loaded = data.data || data || {};
+      setSettings(loaded);
+      // No additional state needed; gym selection is always search-based.
     } catch (err) {
       console.warn('Settings fetch failed:', err.message);
     } finally {
@@ -55,7 +60,8 @@ export default function SettingsScreen() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const fields = {
+      // ── General settings via the generic settings endpoint ──
+      const generalFields = {
         units: settings.units,
         notifications: settings.notifications,
         workoutReminderTime: settings.workoutReminderTime,
@@ -65,9 +71,27 @@ export default function SettingsScreen() {
         proteinTargetGrams: settings.proteinTargetGrams,
         waterGoalMl: settings.waterGoalMl,
         theme: scheme,
-        aiModel: settings.aiModel,
       };
-      await api.updateSettings(fields);
+
+      // ── Gym settings via the dedicated gym endpoint ──
+      const gymFields = {
+        type: settings.gymType,
+        name: settings.gymName,
+        address: settings.gymAddress,
+        placeId: settings.gymPlaceId,
+        phone: settings.gymPhone || '',
+        website: settings.gymWebsite || '',
+        lat: settings.gymLat || 0,
+        lng: settings.gymLng || 0,
+        capacity: settings.gymCapacity || 150,
+        openingHours: settings.gymOpeningHours || '',
+      };
+
+      await Promise.all([
+        api.updateSettings(generalFields),
+        api.updateGym(gymFields),
+      ]);
+
       Alert.alert('Saved', 'Settings updated successfully.');
     } catch (err) {
       Alert.alert('Error', err.message || 'Failed to save settings.');
@@ -155,6 +179,122 @@ export default function SettingsScreen() {
           <GoalRow label="Calories (kcal)" value={s.calorieTarget || 2000} colors={colors} styles={styles} />
           <GoalRow label="Protein (g)" value={s.proteinTargetGrams || 150} colors={colors} styles={styles} />
           <GoalRow label="Water (ml)" value={s.waterGoalMl || 2000} colors={colors} styles={styles} />
+        </Card>
+
+        {/* ── Gym ─────────────────────────────────────────── */}
+        <Card colors={colors} styles={styles}>
+          <SectionTitle colors={colors} styles={styles}>Your Gym</SectionTitle>
+          <Text style={[styles.switchSub, { color: colors.textMuted, marginBottom: Spacing.md }]}>
+            Set the gym you go to so the dashboard can estimate how busy it is.
+          </Text>
+          <Row>
+            <Option
+              active={s.gymType === 'commercial'}
+              onPress={() => updateField('gymType', 'commercial')}
+              label="Commercial Gym"
+              colors={colors}
+              styles={styles}
+            />
+            <Option
+              active={s.gymType === 'home'}
+              onPress={() => updateField('gymType', 'home')}
+              label="I have my own"
+              colors={colors}
+              styles={styles}
+            />
+          </Row>
+          {s.gymType === 'commercial' && (
+            <View style={{ marginTop: Spacing.md }}>
+              {s.gymName && !fetchingDetails ? (
+                // ── Read-only selected gym card ─────────────────────────
+                <View
+                  style={[
+                    styles.selectedGymCard,
+                    { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+                  ]}
+                >
+                  <Text style={[styles.selectedGymName, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {s.gymName}
+                  </Text>
+                  <Text style={[styles.selectedGymAddress, { color: colors.textMuted }]} numberOfLines={2}>
+                    {s.gymAddress || 'No address provided'}
+                  </Text>
+                  {s.gymOpeningHours ? (
+                    <Text style={[styles.selectedGymHours, { color: colors.textMuted }]}>
+                      {formatTodayHours(s.gymOpeningHours)}
+                    </Text>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.changeGymBtn}
+                    onPress={() => {
+                    updateField('gymName', '');
+                    updateField('gymAddress', '');
+                    updateField('gymPlaceId', '');
+                    updateField('gymPhone', '');
+                    updateField('gymWebsite', '');
+                    updateField('gymLat', 0);
+                    updateField('gymLng', 0);
+                    updateField('gymOpeningHours', '');
+                    }}
+                  >
+                    <Text style={[styles.changeGymBtnText, { color: colors.accent }]}>Change gym</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                // ── Gym search (only way to set a commercial gym) ─────────
+                <>
+                  <AutocompleteInput
+                    label="Search gyms"
+                    placeholder="Start typing a gym name or address..."
+                    value={s.gymName || ''}
+                    searchFn={(q) => api.searchGyms(q)}
+                    onSelectSuggestion={async (item) => {
+                      setFetchingDetails(true);
+                      try {
+                        // Google Places gyms have a placeId; Nominatim gyms use lat/lng.
+                        const params = item.placeId
+                          ? { placeId: item.placeId }
+                          : { lat: item.lat, lng: item.lng };
+                        const details = await api.getGymDetails(params);
+                        updateField('gymName', details.data?.name || item.name || '');
+                        updateField('gymAddress', details.data?.address || item.address || '');
+                        updateField('gymPlaceId', details.data?.placeId || item.placeId || '');
+                        updateField('gymPhone', details.data?.phone || item.phone || '');
+                        updateField('gymWebsite', details.data?.website || item.website || '');
+                        updateField('gymLat', details.data?.lat || item.lat || 0);
+                        updateField('gymLng', details.data?.lng || item.lng || 0);
+                        updateField('gymOpeningHours', details.data?.openingHours || '');
+                      } catch (err) {
+                        console.warn('Failed to fetch gym details:', err.message);
+                        // Fall back to the suggestion data we already have.
+                        // Preserve the placeId from the suggestion so future
+                        // refreshes can still target the same venue.
+                        updateField('gymName', item.name || '');
+                        updateField('gymAddress', item.address || '');
+                        updateField('gymPlaceId', item.placeId || '');
+                        updateField('gymPhone', item.phone || '');
+                        updateField('gymWebsite', item.website || '');
+                        updateField('gymLat', item.lat || 0);
+                        updateField('gymLng', item.lng || 0);
+                        updateField('gymOpeningHours', '');
+                      } finally {
+                        setFetchingDetails(false);
+                      }
+                    }}
+                  />
+                  {fetchingDetails && (
+                    <ActivityIndicator style={{ marginVertical: Spacing.md }} color={colors.accent} />
+                  )}
+                  <Text style={[styles.caption, { color: colors.textMuted, marginTop: Spacing.sm }]}>
+                    Search by name, brand, or address.
+                  </Text>
+                </>
+              )}
+              <Text style={[styles.caption, { color: colors.textMuted, marginTop: Spacing.md }]}>
+                Used for live crowd data via BestTime.
+              </Text>
+            </View>
+          )}
         </Card>
 
         {/* ── Theme ──────────────────────────────────────── */}
@@ -304,5 +444,33 @@ function makeStyles(theme) {
     },
     saveBtnDisabled: { opacity: 0.6 },
     saveBtnText: { ...Typography.bodyMedium, fontWeight: '700' },
+    selectedGymCard: {
+      borderRadius: BorderRadius.md,
+      borderWidth: 1,
+      padding: Spacing.md,
+    },
+    selectedGymName: {
+      ...Typography.bodyMedium,
+      fontWeight: '600',
+      marginBottom: Spacing.xs,
+    },
+    selectedGymAddress: {
+      ...Typography.caption,
+      marginBottom: Spacing.sm,
+    },
+    selectedGymHours: {
+      ...Typography.caption,
+      fontStyle: 'italic',
+      marginBottom: Spacing.sm,
+    },
+    changeGymBtn: {
+      alignSelf: 'flex-start',
+      marginTop: Spacing.xs,
+    },
+    changeGymBtnText: {
+      ...Typography.bodySmall,
+      fontWeight: '600',
+    },
+    caption: { ...Typography.caption },
   });
 }

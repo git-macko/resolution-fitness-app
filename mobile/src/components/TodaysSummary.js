@@ -23,7 +23,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Card from './Card';
-import Colors from '../theme/colors';
+import { useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing } from '../theme/spacing';
 
@@ -57,6 +57,8 @@ import { Spacing } from '../theme/spacing';
  * surrounding layout does NOT inherit a stray `marginBottom` gap.
  */
 export default function TodaysSummary({ metrics = [] }) {
+  const styles = useThemedStyles(makeStyles);
+
   if (metrics.length === 0) return null;
   return (
     <View style={styles.row}>
@@ -71,38 +73,41 @@ export default function TodaysSummary({ metrics = [] }) {
   );
 }
 
-const styles = StyleSheet.create({
-  // ── Layout pattern (position lives here) ──
-  row: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  // Each card takes an even slice of the row.
-  card: {
-    flex: 1,
-  },
-  // Inner content is centered within each card surface.
-  cardInner: {
-    padding: Spacing.lg,
-    alignItems: 'center',
-  },
-  // ── Typography ──
-  // Big metric value.
-  value: {
-    ...Typography.statSmall,
-    color: Colors.black,
-  },
-  // Metric label (e.g. "Cal Burned", "Water").
-  label: {
-    ...Typography.captionMedium,
-    color: Colors.textPrimary,
-    marginTop: Spacing.xs,
-  },
-  // Trailing subtitle (e.g. "kcal today", "of 2000ml") — optional.
-  sub: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    marginTop: Spacing.xs,
-  },
-});
+function makeStyles(theme) {
+  const { colors } = theme;
+  return StyleSheet.create({
+    // ── Layout pattern (position lives here) ──
+    row: {
+      flexDirection: 'row',
+      gap: Spacing.md,
+      marginBottom: Spacing.lg,
+    },
+    // Each card takes an even slice of the row.
+    card: {
+      flex: 1,
+    },
+    // Inner content is centered within each card surface.
+    cardInner: {
+      padding: Spacing.lg,
+      alignItems: 'center',
+    },
+    // ── Typography ──
+    // Big metric value.
+    value: {
+      ...Typography.statSmall,
+      color: colors.textHeading,
+    },
+    // Metric label (e.g. "Cal Burned", "Water").
+    label: {
+      ...Typography.captionMedium,
+      color: colors.textPrimary,
+      marginTop: Spacing.xs,
+    },
+    // Trailing subtitle (e.g. "kcal today", "of 2000ml") — optional.
+    sub: {
+      ...Typography.caption,
+      color: colors.textMuted,
+      marginTop: Spacing.xs,
+    },
+  });
+}

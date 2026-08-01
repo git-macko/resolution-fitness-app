@@ -1,6 +1,7 @@
 // Resolution Fitness App — Health Screen
 // Nutrition tracking, food scanning, pre/post workout meals,
 // water tracking, and personalized meal suggestions.
+// Theme-aware.
 
 import React, { useState, useCallback } from 'react';
 import {
@@ -13,13 +14,15 @@ import HeroCard from '../components/HeroCard';
 import HeroStatRow from '../components/HeroStat';
 import Card from '../components/Card';
 import MimiMark from '../components/MimiMark';
-import Colors from '../theme/colors';
+import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Layout } from '../theme/spacing';
 import usePressScale from '../utils/usePressScale';
 
 export default function HealthScreen({ navigation }) {
   const mimiPress = usePressScale(0.92);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
   const [dailyNutrition, setDailyNutrition] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
@@ -47,10 +50,6 @@ export default function HealthScreen({ navigation }) {
   }, []);
 
   // ── Refetch whenever the screen gains focus (tab switch, back nav) ──
-  // This ensures health data is fresh after:
-  //   - Logging back in after logout
-  //   - Returning from another tab
-  //   - Adding meals/water from other screens
   useFocusEffect(
     useCallback(() => {
       fetchData();
@@ -68,37 +67,37 @@ export default function HealthScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface }]}>
         <View>
-          <Text style={styles.headerTitle}>Health</Text>
-          <Text style={styles.headerSub}>Nutrition & Diet</Text>
+          <Text style={[styles.headerTitle, { color: colors.textHeading }]}>Health</Text>
+          <Text style={[styles.headerSub, { color: colors.textSecondary }]}>Nutrition & Diet</Text>
         </View>
         <Pressable
           onPress={() => navigation.navigate('Chat')}
           {...mimiPress.handlers}
           accessibilityLabel="Ask Mimi"
         >
-          <Animated.View style={[styles.mimiButton, mimiPress.animatedStyle]}>
+          <Animated.View style={[styles.mimiButton, { borderColor: colors.accent }, mimiPress.animatedStyle]}>
             <MimiMark size={32} />
-            <Text style={styles.mimiLabel}>Ask Mimi</Text>
+            <Text style={[styles.mimiLabel, { color: colors.textSecondary }]}>Ask Mimi</Text>
           </Animated.View>
         </Pressable>
       </View>
 
         {/* ── Error Banner ─────────────────────────────────── */}
         {fetchError ? (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{fetchError}</Text>
+          <View style={[styles.errorBanner, { backgroundColor: colors.accentWash }]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>{fetchError}</Text>
             <TouchableOpacity onPress={onRefresh}>
-              <Text style={styles.errorRetry}>Retry</Text>
+              <Text style={[styles.errorRetry, { color: colors.error }]}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -126,68 +125,68 @@ export default function HealthScreen({ navigation }) {
 
         {/* ── Food Scanner Button ─────────────────────────────── */}
         <TouchableOpacity
-          style={styles.scanBtn}
+          style={[styles.scanBtn, { borderColor: colors.accent }]}
           onPress={() => navigation.navigate('FoodScan')}
         >
           <Text style={styles.scanIcon}>📸</Text>
           <View style={styles.scanTextWrap}>
-            <Text style={styles.scanTitle}>Scan Your Food</Text>
-            <Text style={styles.scanSub}>
+            <Text style={[styles.scanTitle, { color: colors.accent }]}>Scan Your Food</Text>
+            <Text style={[styles.scanSub, { color: colors.textSecondary }]}>
               Take a photo to get instant nutrition facts
             </Text>
           </View>
-          <Text style={styles.scanArrow}>→</Text>
+          <Text style={[styles.scanArrow, { color: colors.accent }]}>→</Text>
         </TouchableOpacity>
 
         {/* ── Daily Nutrition Summary ─────────────────────────── */}
         <Card style={styles.marginBottom} contentStyle={styles.summaryCard}>
-          <Text style={styles.sectionTitle}>Today's Intake</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>Today's Intake</Text>
           <View style={styles.macroRow}>
             <View style={styles.macroItem}>
-              <Text style={styles.macroValue}>{totals.calories || 0}</Text>
-              <Text style={styles.macroLabel}>Calories</Text>
+              <Text style={[styles.macroValue, { color: colors.accent }]}>{totals.calories || 0}</Text>
+              <Text style={[styles.macroLabel, { color: colors.textMuted }]}>Calories</Text>
             </View>
-            <View style={styles.macroDivider} />
+            <View style={[styles.macroDivider, { backgroundColor: colors.border }]} />
             <View style={styles.macroItem}>
-              <Text style={[styles.macroValue, { color: Colors.info }]}>
+              <Text style={[styles.macroValue, { color: colors.info }]}>
                 {totals.proteinG || 0}g
               </Text>
-              <Text style={styles.macroLabel}>Protein</Text>
+              <Text style={[styles.macroLabel, { color: colors.textMuted }]}>Protein</Text>
             </View>
-            <View style={styles.macroDivider} />
+            <View style={[styles.macroDivider, { backgroundColor: colors.border }]} />
             <View style={styles.macroItem}>
-              <Text style={[styles.macroValue, { color: Colors.warning }]}>
+              <Text style={[styles.macroValue, { color: colors.warning }]}>
                 {totals.carbsG || 0}g
               </Text>
-              <Text style={styles.macroLabel}>Carbs</Text>
+              <Text style={[styles.macroLabel, { color: colors.textMuted }]}>Carbs</Text>
             </View>
-            <View style={styles.macroDivider} />
+            <View style={[styles.macroDivider, { backgroundColor: colors.border }]} />
             <View style={styles.macroItem}>
-              <Text style={[styles.macroValue, { color: Colors.error }]}>
+              <Text style={[styles.macroValue, { color: colors.error }]}>
                 {totals.fatG || 0}g
               </Text>
-              <Text style={styles.macroLabel}>Fat</Text>
+              <Text style={[styles.macroLabel, { color: colors.textMuted }]}>Fat</Text>
             </View>
           </View>
         </Card>
 
         {/* ── Water Tracking ──────────────────────────────────── */}
         <Card style={styles.marginBottom} contentStyle={styles.waterCard}>
-          <Text style={styles.sectionTitle}>💧 Water</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>💧 Water</Text>
           <View style={styles.waterRow}>
-            <Text style={styles.waterValue}>{waterData.totalMl || 0}ml</Text>
-            <Text style={styles.waterGoal}>/ {waterData.goalMl || 2000}ml</Text>
+            <Text style={[styles.waterValue, { color: colors.info }]}>{waterData.totalMl || 0}ml</Text>
+            <Text style={[styles.waterGoal, { color: colors.textMuted }]}>/ {waterData.goalMl || 2000}ml</Text>
           </View>
-          <View style={styles.waterBar}>
+          <View style={[styles.waterBar, { backgroundColor: colors.border }]}>
             <View
               style={[
                 styles.waterFill,
-                { width: `${Math.min(100, ((waterData.totalMl || 0) / (waterData.goalMl || 2000)) * 100)}%` },
+                { width: `${Math.min(100, ((waterData.totalMl || 0) / (waterData.goalMl || 2000)) * 100)}%`, backgroundColor: colors.info },
               ]}
             />
           </View>
           <TouchableOpacity
-            style={styles.addWaterBtn}
+            style={[styles.addWaterBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
             onPress={async () => {
               try {
                 await api.logWater(250);
@@ -197,20 +196,20 @@ export default function HealthScreen({ navigation }) {
               }
             }}
           >
-            <Text style={styles.addWaterBtnText}>+ Add 250ml</Text>
+            <Text style={[styles.addWaterBtnText, { color: colors.info }]}>+ Add 250ml</Text>
           </TouchableOpacity>
         </Card>
 
         {/* ── Preworkout Meals ────────────────────────────────── */}
         {preworkoutMeals.length > 0 && (
           <View>
-            <Text style={styles.sectionTitle}>⚡ Pre-Workout Meals</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>⚡ Pre-Workout Meals</Text>
             {preworkoutMeals.map((meal, idx) => (
               <Card key={meal.id || idx} style={styles.marginBottomSm} contentStyle={styles.mealCard}>
-                <Text style={styles.mealName}>
+                <Text style={[styles.mealName, { color: colors.textPrimary }]}>
                   {meal.name || `Pre-workout Meal ${idx + 1}`}
                 </Text>
-                <Text style={styles.mealCal}>
+                <Text style={[styles.mealCal, { color: colors.textMuted }]}>
                   {meal.totalCalories || 0} cal • {meal.totalProteinG || 0}g protein
                 </Text>
               </Card>
@@ -221,13 +220,13 @@ export default function HealthScreen({ navigation }) {
         {/* ── Postworkout Meals ───────────────────────────────── */}
         {postworkoutMeals.length > 0 && (
           <View>
-            <Text style={styles.sectionTitle}>🔄 Post-Workout Meals</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>🔄 Post-Workout Meals</Text>
             {postworkoutMeals.map((meal, idx) => (
               <Card key={meal.id || idx} style={styles.marginBottomSm} contentStyle={styles.mealCard}>
-                <Text style={styles.mealName}>
+                <Text style={[styles.mealName, { color: colors.textPrimary }]}>
                   {meal.name || `Post-workout Meal ${idx + 1}`}
                 </Text>
-                <Text style={styles.mealCal}>
+                <Text style={[styles.mealCal, { color: colors.textMuted }]}>
                   {meal.totalCalories || 0} cal • {meal.totalProteinG || 0}g protein
                 </Text>
               </Card>
@@ -238,13 +237,13 @@ export default function HealthScreen({ navigation }) {
         {/* ── General Meals ───────────────────────────────────── */}
         {generalMeals.length > 0 && (
           <View>
-            <Text style={styles.sectionTitle}>🥗 Meals</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>🥗 Meals</Text>
             {generalMeals.map((meal, idx) => (
               <Card key={meal.id || idx} style={styles.marginBottomSm} contentStyle={styles.mealCard}>
-                <Text style={styles.mealName}>
+                <Text style={[styles.mealName, { color: colors.textPrimary }]}>
                   {meal.name || `Meal ${idx + 1}`}
                 </Text>
-                <Text style={styles.mealCal}>
+                <Text style={[styles.mealCal, { color: colors.textMuted }]}>
                   {meal.totalCalories || 0} cal • {meal.totalProteinG || 0}g protein
                 </Text>
               </Card>
@@ -255,25 +254,24 @@ export default function HealthScreen({ navigation }) {
         {/* ── Meal Suggestions ────────────────────────────────── */}
         {suggestions.length > 0 && (
           <View>
-            <Text style={styles.sectionTitle}>💡 Suggestions For You</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>💡 Suggestions For You</Text>
             {suggestions.map((suggestion, idx) => (
               <Card
                 key={idx}
-                backgroundColor={Colors.white}
                 style={styles.marginBottomSm}
                 contentStyle={styles.suggestionCard}
               >
-                <Text style={styles.suggestionTitle}>
+                <Text style={[styles.suggestionTitle, { color: colors.accent }]}>
                   {suggestion.title || suggestion.name || 'Meal Suggestion'}
                 </Text>
-                <Text style={styles.suggestionDesc}>
+                <Text style={[styles.suggestionDesc, { color: colors.textSecondary }]}>
                   {suggestion.description || suggestion.desc || ''}
                 </Text>
                 <View style={styles.suggestionMacros}>
-                  <Text style={styles.suggestionMacro}>
+                  <Text style={[styles.suggestionMacro, { color: colors.textMuted }]}>
                     {suggestion.calories || 0} cal
                   </Text>
-                  <Text style={styles.suggestionMacro}>
+                  <Text style={[styles.suggestionMacro, { color: colors.textMuted }]}>
                     {suggestion.proteinG || 0}g protein
                   </Text>
                 </View>
@@ -283,7 +281,7 @@ export default function HealthScreen({ navigation }) {
         )}
 
         {meals.length === 0 && suggestions.length === 0 && (
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
             No meals logged yet. Scan food or create a meal to get started!
           </Text>
         )}
@@ -294,119 +292,112 @@ export default function HealthScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.offWhite },
-  // ── Error Banner ────────────────────────────────────────
-  errorBanner: {
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  errorText: {
-    ...Typography.caption,
-    color: Colors.error,
-    flex: 1,
-  },
-  errorRetry: {
-    ...Typography.captionMedium,
-    color: Colors.error,
-    marginLeft: Spacing.md,
-  },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.offWhite },
-  header: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Layout.screenTopPadding,
-    paddingBottom: Spacing.lg,
-    backgroundColor: Colors.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTitle: { ...Typography.h1, color: Colors.black },
-  headerSub: { ...Typography.bodySmall, color: Colors.textSecondary, marginTop: Spacing.xs },
-  mimiButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-  },
-  mimiLabel: {
-    ...Typography.bodySmall,
-    color: Colors.gray500,
-    fontWeight: '600',
-  },
-  scrollContent: { padding: Spacing.xl },
-  sectionTitle: { ...Typography.bodyMedium, color: Colors.black, marginBottom: Spacing.md, marginTop: Spacing.lg },
-  marginBottom: { marginBottom: Spacing.lg },
-  marginBottomSm: { marginBottom: Spacing.sm },
-  // ── Scan Button ───────────────────────────────────────────
-  scanBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
-  },
-  scanIcon: { fontSize: 36, marginRight: Spacing.lg },
-  scanTextWrap: { flex: 1 },
-  scanTitle: { ...Typography.h4, color: Colors.primary, fontWeight: '700' },
-  scanSub: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
-  scanArrow: { fontSize: 24, color: Colors.primary },
-  // ── Summary ───────────────────────────────────────────────
-  summaryCard: {
-    padding: Spacing.lg,
-  },
-  macroRow: { flexDirection: 'row', alignItems: 'center' },
-  macroItem: { flex: 1, alignItems: 'center' },
-  macroValue: { ...Typography.statSmall, color: Colors.primary },
-  macroLabel: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  macroDivider: { width: 1, height: 28, backgroundColor: Colors.gray200 },
-  // ── Water ─────────────────────────────────────────────────
-  waterCard: {
-    padding: Spacing.lg,
-  },
-  waterRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: Spacing.md },
-  waterValue: { ...Typography.statSmall, color: Colors.info },
-  waterGoal: { ...Typography.bodySmall, color: Colors.textMuted, marginLeft: Spacing.xs },
-  waterBar: {
-    height: 8,
-    backgroundColor: Colors.gray200,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: Spacing.md,
-  },
-  waterFill: { height: 8, backgroundColor: Colors.info, borderRadius: 4 },
-  addWaterBtn: {
-    backgroundColor: Colors.offWhite,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  addWaterBtnText: { ...Typography.captionMedium, color: Colors.info },
-  // ── Meals ─────────────────────────────────────────────────
-  mealCard: {
-    padding: Spacing.lg,
-  },
-  mealName: { ...Typography.bodyMedium, color: Colors.textPrimary },
-  mealCal: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  // ── Suggestions ──────────────────────────────────────────
-  suggestionCard: {
-    padding: Spacing.lg,
-  },
-  suggestionTitle: { ...Typography.bodyMedium, color: Colors.primary },
-  suggestionDesc: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
-  suggestionMacros: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm },
-  suggestionMacro: { ...Typography.caption, color: Colors.textMuted },
-  emptyText: { ...Typography.bodySmall, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing['3xl'] },
-});
+function makeStyles(theme) {
+  const { colors } = theme;
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    // ── Error Banner ────────────────────────────────────────
+    errorBanner: {
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    errorText: {
+      ...Typography.caption,
+      flex: 1,
+    },
+    errorRetry: {
+      ...Typography.captionMedium,
+      marginLeft: Spacing.md,
+    },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    header: {
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Layout.screenTopPadding,
+      paddingBottom: Spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    headerTitle: { ...Typography.h1 },
+    headerSub: { ...Typography.bodySmall, marginTop: Spacing.xs },
+    mimiButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      borderWidth: 2,
+    },
+    mimiLabel: {
+      ...Typography.bodySmall,
+      fontWeight: '600',
+    },
+    scrollContent: { padding: Spacing.xl },
+    sectionTitle: { ...Typography.bodyMedium, marginBottom: Spacing.md, marginTop: Spacing.lg },
+    marginBottom: { marginBottom: Spacing.lg },
+    marginBottomSm: { marginBottom: Spacing.sm },
+    // ── Scan Button ───────────────────────────────────────────
+    scanBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: BorderRadius.lg,
+      borderWidth: 2,
+      padding: Spacing.xl,
+      marginBottom: Spacing.lg,
+    },
+    scanIcon: { fontSize: 36, marginRight: Spacing.lg },
+    scanTextWrap: { flex: 1 },
+    scanTitle: { ...Typography.h4, fontWeight: '700' },
+    scanSub: { ...Typography.caption, marginTop: 2 },
+    scanArrow: { fontSize: 24 },
+    // ── Summary ───────────────────────────────────────────────
+    summaryCard: {
+      padding: Spacing.lg,
+    },
+    macroRow: { flexDirection: 'row', alignItems: 'center' },
+    macroItem: { flex: 1, alignItems: 'center' },
+    macroValue: { ...Typography.statSmall },
+    macroLabel: { ...Typography.caption, marginTop: 2 },
+    macroDivider: { width: 1, height: 28 },
+    // ── Water ─────────────────────────────────────────────────
+    waterCard: {
+      padding: Spacing.lg,
+    },
+    waterRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: Spacing.md },
+    waterValue: { ...Typography.statSmall },
+    waterGoal: { ...Typography.bodySmall, marginLeft: Spacing.xs },
+    waterBar: {
+      height: 8,
+      borderRadius: 4,
+      overflow: 'hidden',
+      marginBottom: Spacing.md,
+    },
+    waterFill: { height: 8, borderRadius: 4 },
+    addWaterBtn: {
+      borderRadius: BorderRadius.md,
+      padding: Spacing.md,
+      alignItems: 'center',
+      borderWidth: 1,
+    },
+    addWaterBtnText: { ...Typography.captionMedium },
+    // ── Meals ─────────────────────────────────────────────────
+    mealCard: {
+      padding: Spacing.lg,
+    },
+    mealName: { ...Typography.bodyMedium },
+    mealCal: { ...Typography.caption, marginTop: 2 },
+    // ── Suggestions ──────────────────────────────────────────
+    suggestionCard: {
+      padding: Spacing.lg,
+    },
+    suggestionTitle: { ...Typography.bodyMedium },
+    suggestionDesc: { ...Typography.caption, marginTop: 2 },
+    suggestionMacros: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm },
+    suggestionMacro: { ...Typography.caption },
+    emptyText: { ...Typography.bodySmall, textAlign: 'center', marginTop: Spacing['3xl'] },
+  });
+}

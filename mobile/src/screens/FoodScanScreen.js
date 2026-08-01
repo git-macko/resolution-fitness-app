@@ -1,19 +1,22 @@
 // Resolution Fitness App — Food Scan Screen
 // AI-powered photo nutrition analysis with allergen detection.
+// Shows per-food health benefits from the foodDetails field.
 // Theme-aware.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Image, StyleSheet,
   ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import api from '../api/client';
+import { BASE_URL } from '../api/config';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows } from '../theme/spacing';
 
-export default function FoodScanScreen({ navigation }) {
+export default function FoodScanScreen({ route, navigation }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
@@ -21,6 +24,36 @@ export default function FoodScanScreen({ navigation }) {
   const [scanResult, setScanResult] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [expandedBenefit, setExpandedBenefit] = useState(null);
+
+  // Support viewing a past scan from ScanHistoryScreen
+  useEffect(() => {
+    const pastScan = route?.params?.pastScan;
+    if (pastScan) {
+      setScanResult(pastScan);
+      if (pastScan.photoUrl) {
+        const normalizedBase = BASE_URL.replace(/\/$/, '');
+        const photoPath = pastScan.photoUrl.startsWith('/')
+          ? pastScan.photoUrl
+          : `/${pastScan.photoUrl}`;
+        setImageUri(`${normalizedBase}${photoPath}`);
+      }
+    }
+  }, [route?.params?.pastScan?.id]);
+
+  const resizeImage = async (uri) => {
+    try {
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1024 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      return manipulated.uri;
+    } catch (err) {
+      console.warn('Image resize failed, using original:', err.message);
+      return uri;
+    }
+  };
 
   const takePhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -33,8 +66,10 @@ export default function FoodScanScreen({ navigation }) {
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.[0]) {
-      setImageUri(result.assets[0].uri);
+      const resizedUri = await resizeImage(result.assets[0].uri);
+      setImageUri(resizedUri);
       setScanResult(null);
+      setExpandedBenefit(null);
     }
   };
 
@@ -49,8 +84,10 @@ export default function FoodScanScreen({ navigation }) {
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.[0]) {
-      setImageUri(result.assets[0].uri);
+      const resizedUri = await resizeImage(result.assets[0].uri);
+      setImageUri(resizedUri);
       setScanResult(null);
+      setExpandedBenefit(null);
     }
   };
 
@@ -88,6 +125,7 @@ export default function FoodScanScreen({ navigation }) {
   const detectedFoods = scanResult?.detectedFoods || scanResult?.foods || [];
   const healthScore = scanResult?.healthScore ?? scanResult?.health_score ?? 0;
   const allergens = scanResult?.allergenFlags || scanResult?.allergen_flags || [];
+  const foodDetails = scanResult?.foodDetails || [];
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -107,7 +145,7 @@ export default function FoodScanScreen({ navigation }) {
           <Text style={styles.uploadIcon}>📸</Text>
           <Text style={[styles.uploadTitle, { color: colors.title }]}>Scan Your Food</Text>
           <Text style={[styles.uploadSub, { color: colors.textSecondary }]}>
-            Take a photo of your meal to see nutrition facts
+            Take a photo of your meal to see nutrition & health benefits
           </Text>
           <View style={styles.uploadButtons}>
             <TouchableOpacity
@@ -124,6 +162,18 @@ export default function FoodScanScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
+      )}
+
+      {/* ── History Link ────────────────────────────────────── */}
+      {!imageUri && !scanResult && (
+        <TouchableOpacity
+          style={[styles.historyBtn, { borderColor: colors.border }]}
+          onPress={() => navigation.navigate('ScanHistory')}
+        >
+          <Text style={[styles.historyBtnText, { color: colors.textSecondary }]}>
+            📜 View Scan History
+          </Text>
+        </TouchableOpacity>
       )}
 
       {/* ── Scan Button ───────────────────────────────────────── */}
@@ -144,6 +194,13 @@ export default function FoodScanScreen({ navigation }) {
       {/* ── Results ─────────────────────────────────────────────── */}
       {scanResult && (
         <View style={styles.resultsSection}>
+          {scanResult.name ? (
+            <View style={[styles.nameCard, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.nameLabel, { color: colors.textSecondary }]}>Identified Dish</Text>
+              <Text style={[styles.nameValue, { color: colors.title }]}>{scanResult.name}</Text>
+            </View>
+          ) : null}
+
           <View style={[styles.scoreCard, { backgroundColor: colors.surface }]}>
             <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>Health Score</Text>
             <Text
@@ -159,20 +216,72 @@ export default function FoodScanScreen({ navigation }) {
             </Text>
           </View>
 
-          <Text style={[styles.sectionTitle, { color: colors.title }]}>Detected</Text>
+          {scanResult.ingredients && scanResult.ingredients.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.title }]}>Ingredients</Text>
+              <View style={[styles.ingredientsCard, { backgroundColor: colors.surface }]}>
+                {scanResult.ingredients.map((ingredient, idx) => (
+                  <View key={idx} style={[styles.ingredientPill, { backgroundColor: colors.accentBg }]}>
+                    <Text style={[styles.ingredientText, { color: colors.accent }]}>{ingredient}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          <Text style={[styles.sectionTitle, { color: colors.title }]}>Detected Foods</Text>
           {Array.isArray(detectedFoods)
-            ? detectedFoods.map((food, idx) => (
-                <View key={idx} style={[styles.foodItem, { backgroundColor: colors.surface }]}>
-                  <Text style={[styles.foodName, { color: colors.textPrimary }]}>
-                    {typeof food === 'string' ? food : food.name || 'Food item'}
-                  </Text>
-                  {typeof food === 'object' && food.confidence && (
-                    <Text style={[styles.foodConfidence, { color: colors.textMuted }]}>
-                      {Math.round(food.confidence * 100)}% confidence
-                    </Text>
-                  )}
-                </View>
-              ))
+            ? detectedFoods.map((food, idx) => {
+                const foodName = typeof food === 'string' ? food : food.name || 'Food item';
+                const detail = foodDetails[idx];
+                const isExpanded = expandedBenefit === idx;
+
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[styles.foodItem, { backgroundColor: colors.surface }]}
+                    onPress={() => detail && setExpandedBenefit(isExpanded ? null : idx)}
+                    activeOpacity={detail ? 0.7 : 1}
+                  >
+                    <View style={styles.foodItemHeader}>
+                      <View style={styles.foodItemLeft}>
+                        <Text style={[styles.foodName, { color: colors.textPrimary }]}>{foodName}</Text>
+                        {typeof food === 'object' && food.confidence && (
+                          <Text style={[styles.foodConfidence, { color: colors.textMuted }]}>
+                            {Math.round(food.confidence * 100)}% confidence
+                          </Text>
+                        )}
+                      </View>
+                      {detail && (
+                        <Text style={[styles.expandArrow, { color: colors.textMuted }]}>
+                          {isExpanded ? '▲' : '▼'}
+                        </Text>
+                      )}
+                    </View>
+                    {isExpanded && detail && (
+                      <View style={[styles.benefitCard, { backgroundColor: colors.accentBg, borderLeftColor: colors.accent }]}>
+                        <View style={styles.benefitMacroRow}>
+                          <Text style={[styles.benefitMacro, { color: colors.accent }]}>
+                            {detail.calories} cal
+                          </Text>
+                          <Text style={[styles.benefitMacro, { color: colors.accent }]}>
+                            {detail.proteinG}g protein
+                          </Text>
+                          <Text style={[styles.benefitMacro, { color: colors.accent }]}>
+                            {detail.carbsG}g carbs
+                          </Text>
+                          <Text style={[styles.benefitMacro, { color: colors.accent }]}>
+                            {detail.fatG}g fat
+                          </Text>
+                        </View>
+                        <Text style={[styles.benefitText, { color: colors.textPrimary }]}>
+                          {detail.healthBenefit}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
             : (
               <Text style={[styles.foodSummary, { color: colors.textPrimary }]}>{String(detectedFoods)}</Text>
             )}
@@ -199,7 +308,7 @@ export default function FoodScanScreen({ navigation }) {
 
           {scanResult.healthFacts ? (
             <View style={[styles.factsCard, { backgroundColor: colors.accentBg }]}>
-              <Text style={[styles.factsTitle, { color: colors.accent }]}>Health Facts</Text>
+              <Text style={[styles.factsTitle, { color: colors.accent }]}>Health Benefits</Text>
               <Text style={[styles.factsText, { color: colors.textPrimary }]}>{scanResult.healthFacts}</Text>
             </View>
           ) : null}
@@ -295,7 +404,22 @@ function makeStyles(theme) {
       marginBottom: Spacing.xl,
     },
     scanBtnText: { ...Typography.bodyMedium, fontWeight: '700' },
+    historyBtn: {
+      borderRadius: BorderRadius.md,
+      borderWidth: 1,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      marginBottom: Spacing.xl,
+    },
+    historyBtnText: { ...Typography.bodyMedium, fontWeight: '600' },
     resultsSection: { marginTop: Spacing.xl },
+    nameCard: {
+      borderRadius: BorderRadius.md,
+      padding: Spacing.xl,
+      marginBottom: Spacing.xl,
+    },
+    nameLabel: { ...Typography.caption, textAlign: 'center' },
+    nameValue: { ...Typography.h4, textAlign: 'center', marginTop: Spacing.xs, fontWeight: '700' },
     scoreCard: {
       borderRadius: BorderRadius.md,
       padding: Spacing.xl,
@@ -304,15 +428,51 @@ function makeStyles(theme) {
     },
     scoreLabel: { ...Typography.caption },
     scoreValue: { ...Typography.stat, marginTop: Spacing.xs },
+    ingredientsCard: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      marginBottom: Spacing.xl,
+    },
+    ingredientPill: {
+      borderRadius: BorderRadius.full,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    ingredientText: { ...Typography.captionMedium, fontWeight: '600' },
     sectionTitle: { ...Typography.bodyMedium, marginBottom: Spacing.md, marginTop: Spacing.lg },
     foodItem: {
       borderRadius: BorderRadius.sm,
-      padding: Spacing.md,
       marginBottom: Spacing.xs,
+      overflow: 'hidden',
     },
+    foodItemHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: Spacing.md,
+    },
+    foodItemLeft: { flex: 1 },
     foodName: { ...Typography.bodyMedium },
     foodConfidence: { ...Typography.caption, marginTop: 2 },
+    expandArrow: { fontSize: 12, paddingLeft: Spacing.md },
     foodSummary: { ...Typography.body },
+    benefitCard: {
+      padding: Spacing.lg,
+      marginHorizontal: Spacing.md,
+      marginBottom: Spacing.md,
+      borderRadius: BorderRadius.sm,
+      borderLeftWidth: 3,
+    },
+    benefitMacroRow: {
+      flexDirection: 'row',
+      gap: Spacing.md,
+      marginBottom: Spacing.sm,
+    },
+    benefitMacro: { ...Typography.captionMedium, fontWeight: '700' },
+    benefitText: { ...Typography.bodySmall, lineHeight: 20 },
     macroRow: { flexDirection: 'row', marginBottom: Spacing.xl },
     macroItem: { flex: 1, alignItems: 'center' },
     macroValue: { ...Typography.statSmall },

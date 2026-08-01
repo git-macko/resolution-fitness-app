@@ -33,6 +33,7 @@ import WorkoutExecutionScreen from '../screens/WorkoutExecutionScreen';
 import ExerciseDetailScreen from '../screens/ExerciseDetailScreen';
 import CreatePlanScreen from '../screens/CreatePlanScreen';
 import FoodScanScreen from '../screens/FoodScanScreen';
+import ScanHistoryScreen from '../screens/ScanHistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ChatScreen from '../screens/ChatScreen';
 
@@ -81,7 +82,7 @@ function DashboardStack() {
       <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ title: 'AI Coach' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -115,7 +116,7 @@ function FitnessStack() {
       <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ title: 'AI Coach' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -137,9 +138,14 @@ function HealthStack() {
         options={{ title: 'Scan Food' }}
       />
       <Stack.Screen
+        name="ScanHistory"
+        component={ScanHistoryScreen}
+        options={{ title: 'Scan History' }}
+      />
+      <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ title: 'AI Coach' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -163,7 +169,7 @@ function AccountStack() {
       <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ title: 'AI Coach' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

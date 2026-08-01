@@ -235,6 +235,58 @@ class ApiClient {
     return this.request('/api/dashboard', options);
   }
 
+  // ── Gym ────────────────────────────────────────────────────────────
+
+  async getGym() {
+    return this.request('/api/profile/gym');
+  }
+
+  async updateGym(fields) {
+    invalidateCache('/api/profile/gym');
+    invalidateCache('/api/dashboard');
+    return this.request('/api/profile/gym', {
+      method: 'PUT',
+      body: JSON.stringify(fields),
+    });
+  }
+
+  async refreshGymHours() {
+    invalidateCache('/api/profile/gym');
+    invalidateCache('/api/dashboard');
+    invalidateCache('/api/gym-crowd');
+    return this.request('/api/profile/gym/refresh-hours', {
+      method: 'POST',
+      body: '',
+    });
+  }
+
+  async getGymCrowd() {
+    return this.request('/api/gym-crowd');
+  }
+
+  async reportGymCrowd(level) {
+    invalidateCache('/api/gym-crowd');
+    invalidateCache('/api/dashboard');
+    return this.request('/api/gym-crowd/report', {
+      method: 'POST',
+      body: JSON.stringify({ level }),
+    });
+  }
+
+  async searchGyms(query) {
+    return this.request(`/api/gyms/search?q=${encodeURIComponent(query || '')}`);
+  }
+
+  async getGymDetails({ placeId, lat, lng } = {}) {
+    let url = '/api/gyms/details?';
+    if (placeId) {
+      url += `placeId=${encodeURIComponent(placeId)}`;
+    } else if (lat != null && lng != null) {
+      url += `lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`;
+    }
+    return this.request(url);
+  }
+
   // ── Exercises ──────────────────────────────────────────────────
 
   async getExercises(muscleGroup, options) {
@@ -407,7 +459,7 @@ class ApiClient {
     const match = /\.(\w+)$/.exec(filename || '');
     const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-    formData.append('foodImage', {
+    formData.append('foodPhoto', {
       uri: imageUri,
       name: filename || 'food.jpg',
       type,
@@ -481,6 +533,18 @@ class ApiClient {
     });
   }
 
+  // ── Quotes & Facts ───────────────────────────────────────────
+
+  async getRandomQuote(excludeId, options) {
+    const query = excludeId ? `?exclude=${encodeURIComponent(excludeId)}` : '';
+    return this.request(`/api/quotes${query}`, options);
+  }
+
+  async getRandomFact(excludeId, options) {
+    const query = excludeId ? `?exclude=${encodeURIComponent(excludeId)}` : '';
+    return this.request(`/api/facts${query}`, options);
+  }
+
   // ── AI Chat ────────────────────────────────────────────────────
 
   async sendChatMessage(message) {
@@ -488,6 +552,99 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ message }),
     });
+  }
+
+  async createChatPlan(message, routineType) {
+    invalidateCache('/api/plans');
+    return this.request('/api/chat/plan', {
+      method: 'POST',
+      body: JSON.stringify({ message, routineType }),
+    });
+  }
+
+  // Streams a chat message from POST /api/chat/stream.
+  // Calls onChunk(text) as each piece of the reply arrives and onDone(fullText)
+  // when the stream finishes. onError(error) is called if the request fails.
+  async sendChatMessageStream(message, onChunk, onDone, onError) {
+    const token = await this.getToken();
+
+    const xhr = new XMLHttpRequest();
+    let rawBuffer = '';
+    let fullText = '';
+    let parseOffset = 0; // bytes of responseText already processed
+
+    xhr.open('POST', `${BASE_URL}/api/chat/stream`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
+    const parseEvents = (text) => {
+      rawBuffer += text;
+      const parts = rawBuffer.split('\n\n');
+      // Keep the last incomplete part in the buffer.
+      rawBuffer = parts.pop() || '';
+
+      for (const eventText of parts) {
+        const trimmed = eventText.trim();
+        if (!trimmed) continue;
+
+        const lines = trimmed.split('\n');
+        let eventName = 'chunk';
+        let data = '';
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            eventName = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            data = line.slice(5).trim();
+          }
+        }
+
+        try {
+          const payload = JSON.parse(data);
+          if (eventName === 'chunk' && payload.text) {
+            fullText += payload.text;
+            onChunk(payload.text);
+          } else if (eventName === 'done') {
+            fullText = payload.text || fullText;
+          } else if (eventName === 'error') {
+            onError(new Error(payload.text || 'AI limit reached'));
+          }
+        } catch (e) {
+          // Ignore malformed events.
+        }
+      }
+    };
+
+    xhr.onprogress = () => {
+      const newText = xhr.responseText.slice(parseOffset);
+      parseOffset = xhr.responseText.length;
+      if (!newText) return;
+      parseEvents(newText);
+    };
+
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        onError(new Error(`Request failed with status ${xhr.status}`));
+        return;
+      }
+      // Parse any remaining buffered data.
+      parseEvents('');
+      onDone(fullText);
+    };
+
+    xhr.onerror = () => {
+      onError(new Error('Network error'));
+    };
+
+    xhr.ontimeout = () => {
+      onError(new Error('Request timed out'));
+    };
+
+    xhr.timeout = 60000;
+    xhr.send(JSON.stringify({ message }));
+
+    return xhr;
   }
 
   async getChatHistory(options) {
@@ -500,6 +657,12 @@ class ApiClient {
 
   async clearChatHistory() {
     return this.request('/api/chat/history', { method: 'DELETE' });
+  }
+
+  async deleteChatMessage(messageId) {
+    return this.request(`/api/chat/history/${encodeURIComponent(messageId)}`, {
+      method: 'DELETE',
+    });
   }
 }
 

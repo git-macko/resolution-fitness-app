@@ -105,21 +105,34 @@ type LogWaterRequest struct {
 // ── Scanned Food ─────────────────────────────────────────────────────
 // ScannedFood represents a food photo analysis result.
 type ScannedFood struct {
-	ID               string   `json:"id"`
-	UserID           string   `json:"userId"`
-	PhotoURL         string   `json:"photoUrl"`
-	DetectedFoods    []string `json:"detectedFoods"`
-	EstimatedServing string   `json:"estimatedServing,omitempty"`
-	Calories         int      `json:"calories"`
-	ProteinG         float64  `json:"proteinG"`
-	CarbsG           float64  `json:"carbsG"`
-	FatG             float64  `json:"fatG"`
-	HealthScore      int      `json:"healthScore"`
-	HealthFacts      string   `json:"healthFacts"`
-	AllergenFlags    []string `json:"allergenFlags,omitempty"`
-	WasLogged        bool     `json:"wasLogged"`
-	LoggedMealType   string   `json:"loggedMealType,omitempty"`
-	CreatedAt        string   `json:"createdAt"`
+	ID               string       `json:"id"`
+	UserID           string       `json:"userId"`
+	PhotoURL         string       `json:"photoUrl"`
+	Name             string       `json:"name,omitempty"`
+	Ingredients      []string     `json:"ingredients,omitempty"`
+	DetectedFoods    []string     `json:"detectedFoods"`
+	EstimatedServing string       `json:"estimatedServing,omitempty"`
+	Calories         int          `json:"calories"`
+	ProteinG         float64      `json:"proteinG"`
+	CarbsG           float64      `json:"carbsG"`
+	FatG             float64      `json:"fatG"`
+	HealthScore      int          `json:"healthScore"`
+	HealthFacts      string       `json:"healthFacts"`
+	FoodDetails      []FoodDetail `json:"foodDetails,omitempty"`
+	AllergenFlags    []string     `json:"allergenFlags,omitempty"`
+	WasLogged        bool         `json:"wasLogged"`
+	LoggedMealType   string       `json:"loggedMealType,omitempty"`
+	CreatedAt        string       `json:"createdAt"`
+}
+
+// FoodDetail contains per-food nutritional breakdown and health benefits.
+type FoodDetail struct {
+	Name          string  `json:"name"`
+	Calories      int     `json:"calories"`
+	ProteinG      float64 `json:"proteinG"`
+	CarbsG        float64 `json:"carbsG"`
+	FatG          float64 `json:"fatG"`
+	HealthBenefit string  `json:"healthBenefit"`
 }
 
 // LogScannedFoodRequest is the JSON body for POST /api/food-scan/log.

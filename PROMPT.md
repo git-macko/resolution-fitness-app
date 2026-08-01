@@ -39,13 +39,15 @@ Resolution-fitnessapp/
 │   │   ├── profile.go                # Get/Update Profile, Upload Picture, Settings, Onboarding
 │   │   ├── workouts.go               # Plans CRUD, SetActive, ClonePlan, Workout Sessions, Templates
 │   │   ├── nutrition.go              # Daily Nutrition, Meals, Water, Weekly Summary, Suggestions
-│   │   ├── food_scan.go              # Food Photo Scan + OpenAI Vision API proxy
+│   │   ├── food_scan.go              # Food Photo Scan + Google Gemini Vision API proxy
+│   │   ├── gemini.go                 # Gemini API client (chat, streaming, food scan)
+│   │   ├── gym.go                    # Gym prefs, crowd estimates, opening hours
 │   │   ├── tracking.go               # Weight, Body Measurements, Sleep
 │   │   ├── dashboard.go              # Aggregated dashboard data
 │   │   └── chat.go                   # AI Coach chat relay
 │   ├── middleware/middleware.go       # JWT Auth, CORS, Request Logger
 │   ├── utils/                        # response.go, validation.go, date_helpers.go
-│   ├── handlers/workouts_test.go     # 16 unit tests for plans and routines
+│   ├── handlers/*_test.go            # 37 unit + integration tests (workouts, chat, gym)
 │   ├── uploads/                      # Static file serving (profile pics, food photos)
 │   └── database.db                   # SQLite database file (auto-created)
 │
@@ -62,6 +64,8 @@ Resolution-fitnessapp/
 │   │   ├── components/               # Reusable UI components
 │   │   │   ├── Card.js               # Generic card container
 │   │   │   ├── ExerciseLibrary.js    # Exercise browser with muscle group filters
+│   │   │   ├── GymCrowdCard.js       # Gym crowd / opening-hours card
+│   │   │   ├── AutocompleteInput.js  # Debounced autocomplete text input
 │   │   │   ├── HeroCard.js           # Dashboard hero card
 │   │   │   ├── HeroStat.js           # Dashboard stat display
 │   │   │   ├── Logo.js               # App logo component
@@ -76,14 +80,13 @@ Resolution-fitnessapp/
 │   │   ├── screens/                   # All app screens
 │   │   │   ├── LoginScreen.js, RegisterScreen.js, OnboardingScreen.js
 │   │   │   ├── DashboardScreen.js, FitnessScreen.js
-│   │   │   ├── HealthScreen.js, FoodScanScreen.js
+│   │   │   ├── HealthScreen.js, FoodScanScreen.js, ScanHistoryScreen.js
 │   │   │   ├── AccountScreen.js, SettingsScreen.js
 │   │   │   ├── ChatScreen.js
 │   │   │   ├── CreatePlanScreen.js, WorkoutExecutionScreen.js, ExerciseDetailScreen.js
 │   │   │   └── __tests__/            # Screen-level tests
 │   │   ├── theme/                    # Theme system
 │   │   │   ├── card.js               # Card style presets
-│   │   │   ├── colors.js             # Color palette
 │   │   │   ├── outlineText.js        # Outline text style helper
 │   │   │   ├── spacing.js            # Spacing constants
 │   │   │   ├── themes.js             # Light/dark theme definitions
@@ -91,11 +94,8 @@ Resolution-fitnessapp/
 │   │   │   └── __tests__/            # Theme tests
 │   │   └── utils/
 │   │       ├── dates.js              # Date formatting helpers
+│   │       ├── openingHours.js       # Opening-hours parsing/formatting helpers
 │   │       └── usePressScale.js      # Press animation hook
-│
-├── scripts/                          # Utility scripts
-│   ├── update-lan-ip.sh
-│   └── update-lan-ip.ps1
 │
 └── PROMPT.md                         # Project overview & API reference
 ```
@@ -137,10 +137,19 @@ Resolution-fitnessapp/
 - Fitness progression: XP, level, workout count, volume, streak
 - Weekly workout completion rate
 
+### Gym Crowd & Opening Hours
+- Gym selection with autocomplete (Google Places when configured, Nominatim fallback)
+- Crowd estimates: BestTime API, community reports, or time-of-day simulation
+- Opening-hours enrichment (Google Places / Overpass) with open/closed status
+- 1–5 crowd level reporting with 60-minute community aggregation window
+- Manual hours refresh (`POST /api/profile/gym/refresh-hours`)
+
 ### AI Coach
-- Chat relay through Go backend to OpenAI API
+- Chat relay through Go backend to Google Gemini API
 - User context injection (goals, allergies, recent workouts)
-- Message history persistence
+- Streaming responses (SSE) with word-by-word rendering
+- Natural-language weekly plan generation (`POST /api/chat/plan`)
+- Message history persistence + per-message delete
 - Suggested prompt chips
 - Clear chat history
 
@@ -148,7 +157,9 @@ Resolution-fitnessapp/
 - Daily nutrition summary
 - Meal logging with preworkout/postworkout/general categorization
 - Water intake tracking
-- Food photo scanner (camera → Go backend → OpenAI Vision API → analysis)
+- Food photo scanner (camera → Go backend → Google Gemini → analysis)
+- Ingredient breakdown, health score, and allergen flags per scan
+- Scan history with saved analyses
 - Meal suggestions filtered by allergies and dietary preferences
 - Weekly nutrition summary
 
@@ -158,8 +169,9 @@ Resolution-fitnessapp/
 - Sleep logging with quality rating
 
 ### Theme
-- Primary: `#7C3AED` (vivid purple) with `#A78BFA` (light purple)
-- Monochrome foundation with purple accent
+- Primary: `#EA580C` (orange) with `#FB923C` (light orange) for dark mode
+- Monochrome foundation with orange accent
+- Full light/dark mode support via ThemeContext with AsyncStorage persistence
 - Consistently applied across all screens via theme system
 
 ## What's NOT Yet Implemented
@@ -173,7 +185,6 @@ These are from the original specification but deferred or simplified:
 - **Workout Templates** — Cached in-memory Go structs (not seeded in DB yet)
 - **Offline resilience** — No local caching of API data
 - **Push notifications** — Not configured
-- **Dark mode** — Implemented via ThemeContext (light/dark scheme)
 - **Drag-and-drop exercise reordering** — Not implemented
 - **BMI calculator** — Not implemented
 - **Data export** — Not implemented
@@ -201,6 +212,9 @@ These are from the original specification but deferred or simplified:
 | PUT | `/api/profile/settings` | Update settings |
 | POST | `/api/profile/onboarding` | Complete onboarding |
 | DELETE | `/api/profile` | Delete account |
+| GET | `/api/profile/gym` | Get gym preference |
+| PUT | `/api/profile/gym` | Update gym preference |
+| POST | `/api/profile/gym/refresh-hours` | Manually refresh opening hours |
 
 ### Plans & Routines (protected)
 | Method | Path | Description |
@@ -256,14 +270,25 @@ These are from the original specification but deferred or simplified:
 | GET/POST | `/api/measurements` | Body measurements |
 | GET/POST | `/api/sleep` | Sleep logs |
 
+### Gym Crowd (protected)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/gym-crowd` | Crowd estimate for the configured gym |
+| POST | `/api/gym-crowd/report` | Report crowd level (1–5) |
+| GET | `/api/gyms/search` | Gym autocomplete (`?q=`) |
+| GET | `/api/gyms/details` | Gym details + opening hours (`?placeId=` or `?lat=&lng=`) |
+
 ### Dashboard & Chat (protected)
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/dashboard` | Aggregated dashboard data |
 | POST | `/api/chat` | Send message to AI Coach |
+| POST | `/api/chat/stream` | Stream AI Coach reply (SSE) |
+| POST | `/api/chat/plan` | Generate + save a weekly plan from natural language |
 | GET | `/api/chat/history` | Chat history |
 | GET | `/api/chat/suggestions` | Suggested prompts |
 | DELETE | `/api/chat/history` | Clear history |
+| DELETE | `/api/chat/history/{messageId}` | Delete a single message |
 
 ### Misc
 | Method | Path | Description |
@@ -298,8 +323,11 @@ cd Resolution-fitnessapp/backend
 go test ./... -v
 ```
 
-16 unit tests covering: CreatePlan limits, SetActivePlan activation/reset,
-ClonePlan limits, GetPlans auto-delete.
+37 tests covering: workout-plan handlers (CreatePlan limits, SetActivePlan
+activation/reset, ClonePlan limits, GetPlans auto-delete, StartWorkout),
+AI Coach chat (fallback, streaming, history, plan generation), gym crowd
+(BestTime cache, community reports, opening-hours enrichment), and a
+food-scan integration test against a real image.
 
 ### Mobile
 ```bash
@@ -307,7 +335,7 @@ cd Resolution-fitnessapp/mobile
 npx jest
 ```
 
-Tests cover theme utilities and screen components.
+Tests cover theme utilities and screen components (20 tests total).
 
 ## Design Decisions
 

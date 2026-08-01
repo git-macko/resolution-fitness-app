@@ -46,8 +46,6 @@ import {
   wrapWithInlineStroke,
   wrapWithViewStroke,
 } from '../outlineText';
-import Colors from '../colors';
-
 function collectTextNodes(node, acc = []) {
   if (node === null || node === undefined) return acc;
   if (Array.isArray(node)) {
@@ -92,7 +90,7 @@ function expectShadowShape(shadowText) {
   expect(shadowText.type).toBe(Text);
   const overlay = shadowText.props.style[1];
   expect(overlay.position).toBe('absolute');
-  expect(overlay.color).toBe(Colors.textWhite);
+  expect(overlay.color).toBe('#FFFFFF');
   expectNoLeakedStrokeProps(overlay);
 }
 
@@ -100,7 +98,7 @@ describe('wrapWithInlineStroke (iOS path)', () => {
   it('keeps the outer element as Text and adds 4 white shadow siblings', () => {
     const out = wrapWithInlineStroke(
       <Text style={{ color: 'red' }}>hello</Text>,
-      Colors.textWhite
+      '#FFFFFF'
     );
     expect(out.type).toBe(Text);
 
@@ -135,7 +133,7 @@ describe('wrapWithInlineStroke (iOS path)', () => {
   it('does not pollute the original Text with shadow-only a11y props', () => {
     const out = wrapWithInlineStroke(
       <Text style={{ color: 'red' }}>hello</Text>,
-      Colors.textWhite
+      '#FFFFFF'
     );
     expect(out.props.accessible).toBeUndefined();
     expect(out.props.accessibilityElementsHidden).toBeUndefined();
@@ -146,7 +144,7 @@ describe('wrapWithInlineStroke (iOS path)', () => {
     const baseStyle = [{ fontWeight: '700' }, { fontSize: 16 }];
     const out = wrapWithInlineStroke(
       <Text style={baseStyle}>styled</Text>,
-      Colors.textWhite
+      '#FFFFFF'
     );
     expect(out.props.style[0]).toBe(baseStyle);
     const shadows = out.props.children.slice(0, 4);
@@ -160,7 +158,7 @@ describe('wrapWithViewStroke (Android fallback)', () => {
   it('returns a View wrapping 4 absolute shadow Texts + the original', () => {
     const out = wrapWithViewStroke(
       <Text style={{ color: 'red' }}>hello</Text>,
-      Colors.textWhite
+      '#FFFFFF'
     );
 
     // Outer type changes from the original Text to a View —
@@ -256,7 +254,7 @@ describe('applyAuroraOutline (platform dispatch)', () => {
       return (
         overlay &&
         overlay.position === 'absolute' &&
-        overlay.color === Colors.textWhite
+        overlay.color === '#FFFFFF'
       );
     });
     expect(shadowed.length).toBe(4);

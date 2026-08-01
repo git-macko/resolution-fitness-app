@@ -78,7 +78,7 @@ _without_ callers needing to know that modernc is the underlying engine.
 # 1. Copy and edit environment
 cp .env.example .env
 # Edit JWT_SECRET (must be a strong random string in production)
-# Edit OPENAI_API_KEY (used for AI Coach + Food Scanner)
+# Edit GEMINI_API_KEY (used for AI Coach + Food Scanner)
 
 # 2. Resolve modules
 go mod tidy
@@ -111,7 +111,12 @@ Loaded from `.env` (or process env, `.env` overrides take precedence). See
 | `PORT` | HTTP listen port | `8080` |
 | `JWT_SECRET` | HMAC secret for signing auth tokens. **Must be a strong random string in production.** | falls back to a development placeholder (`change-me-in-production-use-a-strong-random-secret`) when unset — **do not ship to production without overriding this**. |
 | `DB_PATH` | SQLite file location | `./database.db` |
-| `OPENAI_API_KEY` | Power AI Coach chat + food photo scanner | optional; AI endpoints degrade gracefully if absent |
+| `GEMINI_API_KEY` | Power AI Coach chat + food photo analysis via Google Gemini | optional; AI endpoints fall back to simulated responses if absent |
+| `GEMINI_MODEL` | Gemini model used for chat + food scan | `gemini-3.5-flash` |
+| `BESTTIME_API_KEY` | Real gym crowd/busyness forecasts | optional; falls back to simulation |
+| `BESTTIME_API_URL` | BestTime API base URL | `https://besttime.app/api/v1` |
+| `GOOGLE_PLACES_API_KEY` | Gym autocomplete + opening hours (Places New) | optional; falls back to Nominatim/Overpass |
+| `OVERPASS_API_URL` | Overpass endpoint for OSM opening hours | `https://overpass-api.de/api/interpreter` |
 
 ---
 
@@ -135,7 +140,10 @@ Protected (require `Authorization: Bearer <jwt>`):
 - `/api/food-scan/**` — scan, log, history
 - `/api/weight`, `/api/measurements`, `/api/sleep`
 - `/api/dashboard` — composite greeting + quote + health fact + fitness summary
-- `/api/chat/**` — AI Coach chat, history, suggestions, clear
+- `/api/chat/**` — AI Coach chat (+ SSE stream), plan generation, history, suggestions, clear, delete
+- `/api/profile/gym`, `/api/profile/gym/refresh-hours` — gym preference + manual hours refresh
+- `/api/gym-crowd`, `/api/gym-crowd/report` — crowd estimate + user reports
+- `/api/gyms/search`, `/api/gyms/details` — gym autocomplete + details/opening hours
 - `/uploads/**` — static file serving for uploaded profile pics / food photos
 
 For the full payload/response contract of each route, see `../PROMPT.md` in the
@@ -150,11 +158,13 @@ project root or look at the inline doc-comments above each handler in
 go test ./... -v -count=1
 ```
 
-Expected output: **16/16 PASS** in the `handlers` package (workout-plan handlers,
-edge cases, clone / activate semantics, auto-delete). All other packages report
-`[no test files]`. `go vet ./...` is also clean.
+Expected output: **37/37 PASS** in the `handlers` package (workout-plan handlers,
+edge cases, clone / activate semantics, auto-delete, AI Coach chat, gym crowd,
+food scan). All other packages report `[no test files]`. `go vet ./...` is also
+clean.
 
-Tests are in `handlers/workouts_test.go` and use an in-memory SQLite database
+Tests live in `handlers/workouts_test.go`, `handlers/chat_test.go`, and
+`handlers/gym_test.go`, and use an in-memory SQLite database
 (`database.Initialize(":memory:")`), which is a fast smoke check that the
 no-cgo driver is working in your environment.
 
@@ -173,9 +183,11 @@ backend/
 ├── config/                    Env loading + defaults
 ├── handlers/                  HTTP handlers, grouped by domain (one file each)
 │   ├── auth.go                register / login / refresh
-│   ├── profile.go             user profile CRUD
+│   ├── profile.go             user profile CRUD, settings, gym preference
 │   ├── workouts.go            plan + session handlers
-│   ├── workouts_test.go       unit tests (16 cases, in-memory DB)
+│   ├── gemini.go              Gemini API client (chat, streaming, food scan)
+│   ├── gym.go                 gym search/details, crowd estimates, opening hours
+│   ├── chat_test.go, gym_test.go, workouts_test.go   (37 cases, in-memory DB)
 │   ├── nutrition.go, food_scan.go, dashboard.go, chat.go, ...
 ├── middleware/                CORS, request logger, AuthRequired
 ├── models/                    Wire-format structs + DB row structs
@@ -203,9 +215,10 @@ Tables: `users`, `user_settings`, `user_stats`, `user_goals`, `exercises`,
 `weekly_plans`, `plan_days`, `plan_exercises`, `workout_sessions`,
 `session_exercises`, `session_sets`, `food_logs`, `food_items`,
 `scanned_foods`, `water_logs`, `weight_logs`, `body_measurements`,
-`sleep_logs`, `daily_quotes`, `health_facts`, `chat_messages`.
+`sleep_logs`, `daily_quotes`, `health_facts`, `chat_messages`,
+`besttime_cache`, `gym_crowd_reports`.
 
-Seed data: 26 exercises, 21 daily quotes, 20 health facts (idempotent: only
+Seed data: 27 exercises, 21 daily quotes, 20 health facts (idempotent: only
 seeded when the relevant table is empty).
 
 ---
@@ -241,9 +254,10 @@ will be undone.
    sqlite3"). The single registration in `database/database.go` is canonical.
 
 5. **Tests stay in `go test ./...`.** Tests currently live in
-   `handlers/workouts_test.go`. New tests should stay inside their owning
-   package (e.g. `handlers/foo_test.go` next to `handlers/foo.go`), not in a
-   top-level `tests/` directory.
+   `handlers/workouts_test.go`, `handlers/chat_test.go`, and
+   `handlers/gym_test.go`. New tests should stay inside their owning package
+   (e.g. `handlers/foo_test.go` next to `handlers/foo.go`), not in a top-level
+   `tests/` directory.
 
 If a tool needs an `import` that you suspect pulls in cgo, audit the dependency
 tree with:
@@ -299,5 +313,5 @@ before exposing the server.
 top-level LICENSE file.)
 
 User-uploaded media is served from `/uploads/**` (configured in `main.go`).
-OpenAI calls out of `handlers/chat.go` and `handlers/food_scan.go`; user-entered
-OpenAI keys are encrypted at rest in `user_settings.openai_api_key_enc`.
+Gemini calls go through the shared client in `handlers/gemini.go`, used by
+`handlers/chat.go` (AI Coach) and `handlers/food_scan.go` (food scanner).

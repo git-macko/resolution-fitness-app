@@ -48,6 +48,9 @@ type DashboardData struct {
 
 	// StreakInfo shows the current streak and recent 7-day calendar.
 	StreakInfo StreakInfo `json:"streakInfo"`
+
+	// GymCrowd shows the user's gym crowd estimate.
+	GymCrowd *GymCrowdInfo `json:"gymCrowd,omitempty"`
 }
 
 // ── Dashboard Sub-types ──────────────────────────────────────────────
@@ -136,4 +139,113 @@ type ChatSuggestion struct {
 	Prompt      string `json:"prompt"`
 	Description string `json:"description"`
 	Category    string `json:"category"` // workout | nutrition | motivation | general
+}
+
+// ChatPlanRequest is the JSON body for POST /api/chat/plan.
+// It asks Mimi to turn a natural-language workout request into a
+// structured weekly plan that can be saved for the user.
+type ChatPlanRequest struct {
+	Message     string `json:"message"`
+	RoutineType string `json:"routineType"` // "consistent" or "one_time"
+}
+
+// ── Gym Crowd ──────────────────────────────────────────────────────────
+// GymCrowdInfo is the dashboard widget showing estimated gym occupancy.
+
+type GymCrowdInfo struct {
+	Type         string                    `json:"type"`       // "commercial" | "home"
+	Name         string                    `json:"name"`       // gym name or "My Home Gym"
+	Address      string                    `json:"address,omitempty"`      // gym address displayed under the name
+	Percentage   int                       `json:"percentage"` // 0-100 estimated occupancy
+	Label        string                    `json:"label"`      // "Not too busy", "Busy", etc.
+	Capacity     int                       `json:"capacity"`   // estimated max capacity
+	Phone        string                    `json:"phone,omitempty"`        // contact phone number
+	Website      string                    `json:"website,omitempty"`        // gym website URL
+	Source       string                    `json:"source"`     // "besttime", "simulated", "home", "closed", "user_report" or "community"
+	IsOpen       bool                      `json:"isOpen"`     // true when the gym is currently open per its hours
+	StatusText   string                    `json:"statusText,omitempty"`   // "Open now · Closes at 10 PM" or "Closed now"
+	OpeningHours string                    `json:"openingHours,omitempty"` // JSON string of regular opening hours
+	UserReport   *GymCrowdReportSummary    `json:"userReport,omitempty"`   // this user's latest report for this gym
+	Community    *GymCrowdCommunitySummary `json:"community,omitempty"`    // recent community report summary
+}
+
+// GymCrowdReportRequest is the JSON body for POST /api/gym-crowd/report.
+type GymCrowdReportRequest struct {
+	Level int `json:"level"` // 1 (not busy) to 5 (very busy)
+}
+
+// GymCrowdReportSummary is embedded in GymCrowdInfo to show the current
+// user's latest report for the configured gym.
+type GymCrowdReportSummary struct {
+	Level      int    `json:"level"`
+	ReportedAt string `json:"reportedAt"`
+}
+
+// GymCrowdCommunitySummary shows an aggregated recent community report.
+type GymCrowdCommunitySummary struct {
+	Level int `json:"level"` // rounded average level (1-5)
+	Count int `json:"count"` // number of reports in the window
+}
+
+// OpeningHours represents a venue's regular weekly hours.
+// It supports both structured Google Places data and raw OSM fallback text.
+type OpeningHours struct {
+	OpenNow     bool     `json:"openNow,omitempty"`
+	Periods     []Period `json:"periods,omitempty"`
+	WeekdayText []string `json:"weekdayText,omitempty"`
+	RawText     string   `json:"rawText,omitempty"` // raw OSM opening_hours tag, e.g. "Mo-Fr 06:00-22:00"
+}
+
+// Period is a single open/close period for a venue.
+type Period struct {
+	Open  TimePoint `json:"open"`
+	Close TimePoint `json:"close"`
+}
+
+// TimePoint is a day/hour/minute point used inside Period.
+type TimePoint struct {
+	Day    int `json:"day"`    // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+	Hour   int `json:"hour"`
+	Minute int `json:"minute"`
+}
+
+// UserGym holds the user's gym preference.
+type UserGym struct {
+	Type              string  `json:"type"`     // "commercial" | "home"
+	Name              string  `json:"name"`     // gym name
+	Address           string  `json:"address"`  // gym address (used for BestTime lookups)
+	PlaceID           string  `json:"placeId"`  // Google Maps place_id
+	Phone             string  `json:"phone,omitempty"`     // contact phone number
+	Website           string  `json:"website,omitempty"`   // gym website URL
+	Lat               float64 `json:"lat"`      // latitude
+	Lng               float64 `json:"lng"`      // longitude
+	Capacity          int     `json:"capacity"` // estimated max capacity
+	OpeningHours      string  `json:"openingHours,omitempty"`     // JSON string of regular opening hours
+	HoursRefreshAt    string  `json:"hoursRefreshAt,omitempty"`   // timestamp of last hours auto-refresh attempt
+}
+
+// UpdateUserGymRequest is the JSON body for PUT /api/profile/gym.
+type UpdateUserGymRequest struct {
+	Type         string  `json:"type"`
+	Name         string  `json:"name"`
+	Address      string  `json:"address"`
+	PlaceID      string  `json:"placeId"`
+	Phone        string  `json:"phone,omitempty"`
+	Website      string  `json:"website,omitempty"`
+	Lat          float64 `json:"lat"`
+	Lng          float64 `json:"lng"`
+	Capacity     int     `json:"capacity"`
+	OpeningHours string  `json:"openingHours,omitempty"` // JSON string of regular opening hours
+}
+
+// GymSearchResult is a single gym suggestion returned by /api/gyms/search.
+type GymSearchResult struct {
+	Name         string  `json:"name"`
+	Address      string  `json:"address"`
+	PlaceID      string  `json:"placeId"`
+	Phone        string  `json:"phone,omitempty"` // contact phone number
+	Website      string  `json:"website,omitempty"` // gym website URL
+	Lat          float64 `json:"lat"`
+	Lng          float64 `json:"lng"`
+	OpeningHours string  `json:"openingHours,omitempty"` // JSON string of regular opening hours
 }

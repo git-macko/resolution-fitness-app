@@ -27,7 +27,7 @@ import {
   cardShadows,
   DEFAULT_CARD_SHADOW,
 } from '../theme/card';
-import { lightTheme } from '../theme/themes';
+import { useTheme } from '../contexts/ThemeContext';
 
 /**
  * Card — the unified, shadow-only card surface.
@@ -57,7 +57,7 @@ import { lightTheme } from '../theme/themes';
  *  - backgroundColor?      Override the default surface bg.
  *                          Defaults to lightTheme.colors.surface for
  *                          the tonal-elevation look. Pass e.g.
- *                          `Colors.primaryBg` to tint a specific card.
+ *                          {theme.colors.accentBg} to tint a specific card.
  *  - borderRadius?         Corner radius. Outer & inner both apply it.
  *                          Defaults to CARD_BORDER_RADIUS (xl = 18)
  *                          from `theme/card.js`.
@@ -82,12 +82,13 @@ export default function Card({
   onPress,
   activeOpacity = 0.7,
 }) {
+  const { colors } = useTheme();
   const resolvedShadow =
     typeof shadow === 'string' ? cardShadows[shadow] || {} : shadow || {};
   const resolvedBg =
     backgroundColor !== undefined
       ? backgroundColor
-      : lightTheme.colors.surface;
+      : colors.surface;
 
   const inner = (
     <View style={[{ borderRadius, overflow: 'hidden' }, contentStyle]}>

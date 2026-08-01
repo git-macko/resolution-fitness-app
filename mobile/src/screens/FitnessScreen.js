@@ -1,6 +1,7 @@
 // Resolution Fitness App — Fitness Screen
 // Weekly workout plan calendar, exercise library, and plan builder.
 // Each planned workout day has an "Execute/Lock In" button.
+// Theme-aware.
 
 import React, { useState, useCallback } from 'react';
 import {
@@ -14,7 +15,7 @@ import HeroStatRow from '../components/HeroStat';
 import Card from '../components/Card';
 import ExerciseLibrary from '../components/ExerciseLibrary';
 import MimiMark from '../components/MimiMark';
-import Colors from '../theme/colors';
+import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
 import { getThisWeekMonday, formatWeekLabel } from '../utils/dates';
@@ -32,9 +33,11 @@ export default function FitnessScreen({ navigation }) {
   const [templates, setTemplates] = useState([]);
   const [showPlanActions, setShowPlanActions] = useState(false);
   const mimiPress = usePressScale(0.96);
-
-  const [stats, setStats] = useState(null); // user workout stats for hero card
+  const [stats, setStats] = useState(null);
   const [fetchError, setFetchError] = useState(null);
+
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
   // Effective plan for this week (one-time override takes precedence over consistent)
   const thisWeekMonday = getThisWeekMonday();
@@ -42,16 +45,11 @@ export default function FitnessScreen({ navigation }) {
   const consistentPlans = plans.filter(p => p.routineType !== 'one_time');
   const oneTimePlans = plans.filter(p => p.routineType === 'one_time');
 
-  // ── Resolve the effective plan for a given week ─────────────────
-  // One-time overrides take precedence over consistent routines.
-  // Falls back to the active consistent routine.
   function resolveEffectivePlan(allPlans, weekMonday) {
-    // 1. Look for a one-time plan whose weekStartDate matches
     const override = allPlans.find(
       p => p.routineType === 'one_time' && p.weekStartDate === weekMonday
     );
     if (override) return override;
-    // 2. Fall back to the active consistent plan
     return allPlans.find(p => p.routineType !== 'one_time' && p.isActive) || null;
   }
 
@@ -73,7 +71,6 @@ export default function FitnessScreen({ navigation }) {
       const fetchedTemplates = (templatesData.data || templatesData.templates || templatesData);
       setTemplates(Array.isArray(fetchedTemplates) ? fetchedTemplates : []);
 
-      // Extract stats from dashboard for progression summary
       const dashboard = dashboardData.data || dashboardData;
       if (dashboard) {
         const prog = dashboard.progression || {};
@@ -96,14 +93,6 @@ export default function FitnessScreen({ navigation }) {
     }
   }, []);
 
-  // ── Refetch data whenever the screen gains focus ─────────────────
-  // This ensures plans are always fresh after:
-  //   - Logging back in after logout
-  //   - Navigating back from CreatePlan / WorkoutExecution
-  //   - Switching back to the Fitness tab
-  // Cache is safe to use here because it's already:
-  //   - Wiped on logout (api.logout clears the entire cache)
-  //   - Invalidated on plan create/update/delete/clone mutations
   useFocusEffect(
     useCallback(() => {
       fetchData();
@@ -117,7 +106,6 @@ export default function FitnessScreen({ navigation }) {
 
   const currentPlan = effectiveWeekPlan;
 
-  // Build the week header string
   const weekHeader = currentPlan
     ? (currentPlan.routineType === 'one_time'
       ? `One-time — ${formatWeekLabel(currentPlan.weekStartDate || thisWeekMonday)}`
@@ -126,26 +114,27 @@ export default function FitnessScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── Header ───────────────────────────────────────────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.surface }]}>
         <View style={styles.headerTopRow}>
           <View style={styles.headerTitleGroup}>
-            <Text style={styles.headerTitle}>Fitness</Text>
-            <Text style={styles.headerSub}>
+            <Text style={[styles.headerTitle, { color: colors.textHeading }]}>Fitness</Text>
+            <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
               {weekHeader}
             </Text>
           </View>
           <TouchableOpacity
             style={[
               styles.headerCreateBtn,
+              { backgroundColor: colors.accent, ...Shadows.sm },
               consistentPlans.length >= 2 && oneTimePlans.length >= 3 && styles.headerCreateBtnDisabled,
             ]}
             onPress={() => {
@@ -156,18 +145,18 @@ export default function FitnessScreen({ navigation }) {
               navigation.navigate('CreatePlan');
             }}
           >
-            <Text style={styles.headerCreateBtnIcon}>+</Text>
-            <Text style={styles.headerCreateBtnText}>Create</Text>
+            <Text style={[styles.headerCreateBtnIcon, { color: colors.textInverse }]}>+</Text>
+            <Text style={[styles.headerCreateBtnText, { color: colors.textInverse }]}>Create</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* ── Error Banner ─────────────────────────────────── */}
       {fetchError ? (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{fetchError}</Text>
+        <View style={[styles.errorBanner, { backgroundColor: colors.accentWash }]}>
+          <Text style={[styles.errorText, { color: colors.error }]}>{fetchError}</Text>
           <TouchableOpacity onPress={onRefresh}>
-            <Text style={styles.errorRetry}>Retry</Text>
+            <Text style={[styles.errorRetry, { color: colors.error }]}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -198,28 +187,25 @@ export default function FitnessScreen({ navigation }) {
         </HeroCard>
 
         {/* ── Ask Mimi ───────────────────────────────────────── */}
-        {/* Outlined card: no fill, 2px primary border. Inner text/icon */}
-        {/* pick up the primary color so the row stays cohesive without */}
-        {/* washing out against the off-white page background. */}
         <Pressable
           onPress={() => navigation.navigate('Chat')}
           {...mimiPress.handlers}
           accessibilityLabel="Ask Mimi, AI Coach"
         >
-          <Animated.View style={[styles.mimiCard, mimiPress.animatedStyle]}>
-            <MimiMark size={48} color={Colors.white} background={Colors.primaryLight || Colors.primary} />
+          <Animated.View style={[styles.mimiCard, { borderColor: colors.accent }, mimiPress.animatedStyle]}>
+            <MimiMark size={48} color={colors.textInverse} background={colors.accentSoft} />
             <View style={styles.mimiTextWrap}>
-              <Text style={styles.mimiCardTitle}>Ask Mimi</Text>
-              <Text style={styles.mimiCardSub}>Your AI fitness coach — get tips, plans & answers</Text>
+              <Text style={[styles.mimiCardTitle, { color: colors.accent }]}>Ask Mimi</Text>
+              <Text style={[styles.mimiCardSub, { color: colors.textSecondary }]}>Your AI fitness coach — get tips, plans & answers</Text>
             </View>
-            <Text style={styles.mimiCardArrow}>→</Text>
+            <Text style={[styles.mimiCardArrow, { color: colors.accent }]}>→</Text>
           </Animated.View>
         </Pressable>
 
         {/* ── Existing Plans ───────────────────────────────────── */}
         {plans.length > 0 && (
           <View style={styles.existingPlansSection}>
-            <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing['2xl'] }]}>
               Your Routines ({consistentPlans.length}/2)
             </Text>
             {/* Consistent routines */}
@@ -230,19 +216,18 @@ export default function FitnessScreen({ navigation }) {
                   onPress={() => setShowPlanActions(showPlanActions === plan.id ? null : plan.id)}
                 >
                   <View style={styles.planCardLeft}>
-                    <Text style={styles.planName}>{plan.name}</Text>
-                    <Text style={styles.planMeta}>
+                    <Text style={[styles.planName, { color: colors.textHeading }]}>{plan.name}</Text>
+                    <Text style={[styles.planMeta, { color: colors.textSecondary }]}>
                       {plan.days?.length || plan.planDays?.length || 0} days
                     </Text>
                   </View>
-                  <Text style={styles.planExpand}>
+                  <Text style={[styles.planExpand, { color: colors.textMuted }]}>
                     {showPlanActions === plan.id ? '▲' : '▼'}
                   </Text>
                 </TouchableOpacity>
 
                 {showPlanActions === plan.id && (
-                  <View style={styles.planActions}>
-                    {/* Plan metadata tags */}
+                  <View style={[styles.planActions, { borderTopColor: colors.border }]}>
                     <View style={styles.planMetadataSection}>
                       <View style={styles.planNameRow}>
                         {plan.mode ? (
@@ -270,15 +255,14 @@ export default function FitnessScreen({ navigation }) {
                         )}
                       </View>
                       {plan.modeGoal ? (
-                        <Text style={styles.planGoalExpanded} numberOfLines={3}>
+                        <Text style={[styles.planGoalExpanded, { color: colors.textSecondary }]} numberOfLines={3}>
                           {plan.modeGoal}
                         </Text>
                       ) : null}
                     </View>
 
-                    {/* Workout days inside the expanded card — tappable to start session */}
                     <View style={styles.planDaysList}>
-                      <Text style={styles.planDaysListTitle}>Workout Days</Text>
+                      <Text style={[styles.planDaysListTitle, { color: colors.textSecondary }]}>Workout Days</Text>
                       {(plan.days || plan.planDays || []).map((day, idx) => (
                         <TouchableOpacity
                           key={day.id || idx}
@@ -295,37 +279,37 @@ export default function FitnessScreen({ navigation }) {
                         >
                           <View style={[
                             styles.planDayDot,
-                            day.isRestDay ? styles.planDayDotRest : day.completed ? styles.planDayDotCompleted : styles.planDayDotActive,
+                            day.isRestDay ? { backgroundColor: colors.border } : day.completed ? { backgroundColor: colors.success } : { backgroundColor: colors.accent },
                           ]} />
                           <View style={styles.planDayInfo}>
                             <Text style={[
                               styles.planDayName,
+                              { color: day.completed ? colors.textMuted : colors.textHeading },
                               day.completed && styles.planDayCompleted,
                             ]}>
                               {DAY_LABELS[day.dayOfWeek ?? idx]} — {day.isRestDay ? 'Rest Day' : (day.workoutName || 'Workout')}
                             </Text>
                             {!day.isRestDay && (
-                              <Text style={styles.planDayDetail}>
+                              <Text style={[styles.planDayDetail, { color: colors.textMuted }]}>
                                 {day.exercises?.length || 0} exercises • ~{day.estimatedDuration || 45} min
                               </Text>
                             )}
                           </View>
                           {!day.isRestDay && (
                             day.completed ? (
-                              <Text style={styles.planDayCheck}>✓</Text>
+                              <Text style={[styles.planDayCheck, { color: colors.success }]}>✓</Text>
                             ) : (
-                              <Text style={styles.planDayArrow}>›</Text>
+                              <Text style={[styles.planDayArrow, { color: colors.textMuted }]}>›</Text>
                             )
                           )}
                         </TouchableOpacity>
                       ))}
                     </View>
 
-                    {/* Action buttons */}
-                    <View style={styles.planActionButtons}>
+                    <View style={[styles.planActionButtons, { borderTopColor: colors.border }]}>
                       {!plan.isActive && (
                         <TouchableOpacity
-                          style={[styles.planActionBtn, styles.planActionActivate]}
+                          style={styles.planActionActivate}
                           onPress={() => {
                             Alert.alert(
                               'Activate Routine',
@@ -353,16 +337,16 @@ export default function FitnessScreen({ navigation }) {
                         </TouchableOpacity>
                       )}
                       <TouchableOpacity
-                        style={styles.planActionBtn}
+                        style={[styles.planActionBtn, { backgroundColor: colors.divider }]}
                         onPress={() => {
                           setShowPlanActions(null);
                           navigation.navigate('CreatePlan', { planId: plan.id });
                         }}
                       >
-                        <Text style={styles.planActionBtnText}>✎ Edit</Text>
+                        <Text style={[styles.planActionBtnText, { color: colors.textPrimary }]}>✎ Edit</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={styles.planActionBtn}
+                        style={[styles.planActionBtn, { backgroundColor: colors.divider }]}
                         onPress={async () => {
                           try {
                             await api.clonePlan(plan.id);
@@ -373,10 +357,10 @@ export default function FitnessScreen({ navigation }) {
                           }
                         }}
                       >
-                        <Text style={styles.planActionBtnText}>↻ Clone</Text>
+                        <Text style={[styles.planActionBtnText, { color: colors.textPrimary }]}>↻ Clone</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.planActionBtn, styles.planActionDelete]}
+                        style={[styles.planActionBtn, styles.planActionDelete, { borderColor: colors.error }]}
                         onPress={() => {
                           const deleteMsg = plan.isActive
                             ? `Delete "${plan.name}"? ⚠️ This is your ACTIVE routine. Deleting it will leave you with no active routine.`
@@ -403,18 +387,18 @@ export default function FitnessScreen({ navigation }) {
                           );
                         }}
                       >
-                        <Text style={styles.planActionDeleteText}>✕ Delete</Text>
+                        <Text style={[styles.planActionDeleteText, { color: colors.error }]}>✕ Delete</Text>
                       </TouchableOpacity>
-                      </View>
                     </View>
-                  )}
+                  </View>
+                )}
               </Card>
             ))}
 
             {/* One-time overrides */}
             {oneTimePlans.length > 0 && (
               <>
-                <Text style={[styles.sectionTitle, { marginTop: Spacing.xl }]}>
+                <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing.xl }]}>
                   Upcoming Overrides ({oneTimePlans.length}/3)
                 </Text>
                 {oneTimePlans.map((plan) => (
@@ -424,8 +408,8 @@ export default function FitnessScreen({ navigation }) {
                       onPress={() => setShowPlanActions(showPlanActions === plan.id ? null : plan.id)}
                     >
                       <View style={styles.planCardLeft}>
-                        <Text style={styles.planName}>{plan.name}</Text>
-                        <Text style={styles.planMeta}>
+                        <Text style={[styles.planName, { color: colors.textHeading }]}>{plan.name}</Text>
+                        <Text style={[styles.planMeta, { color: colors.textSecondary }]}>
                           {plan.weekStartDate
                             ? formatWeekLabel(plan.weekStartDate)
                             : 'Upcoming'}
@@ -433,14 +417,13 @@ export default function FitnessScreen({ navigation }) {
                           {plan.days?.length || plan.planDays?.length || 0} days
                         </Text>
                       </View>
-                      <Text style={styles.planExpand}>
+                      <Text style={[styles.planExpand, { color: colors.textMuted }]}>
                         {showPlanActions === plan.id ? '▲' : '▼'}
                       </Text>
                     </TouchableOpacity>
 
                     {showPlanActions === plan.id && (
-                      <View style={styles.planActions}>
-                        {/* Plan metadata tags */}
+                      <View style={[styles.planActions, { borderTopColor: colors.border }]}>
                         <View style={styles.planMetadataSection}>
                           <View style={styles.planNameRow}>
                             {plan.mode ? (
@@ -463,15 +446,14 @@ export default function FitnessScreen({ navigation }) {
                             </View>
                           </View>
                           {plan.modeGoal ? (
-                            <Text style={styles.planGoalExpanded} numberOfLines={3}>
+                            <Text style={[styles.planGoalExpanded, { color: colors.textSecondary }]} numberOfLines={3}>
                               {plan.modeGoal}
                             </Text>
                           ) : null}
                         </View>
 
-                        {/* Workout days inside the expanded card — tappable to start session */}
                         <View style={styles.planDaysList}>
-                          <Text style={styles.planDaysListTitle}>Workout Days</Text>
+                          <Text style={[styles.planDaysListTitle, { color: colors.textSecondary }]}>Workout Days</Text>
                           {(plan.days || plan.planDays || []).map((day, idx) => (
                             <TouchableOpacity
                               key={day.id || idx}
@@ -488,45 +470,45 @@ export default function FitnessScreen({ navigation }) {
                             >
                               <View style={[
                                 styles.planDayDot,
-                                day.isRestDay ? styles.planDayDotRest : day.completed ? styles.planDayDotCompleted : styles.planDayDotActive,
+                                day.isRestDay ? { backgroundColor: colors.border } : day.completed ? { backgroundColor: colors.success } : { backgroundColor: colors.accent },
                               ]} />
                               <View style={styles.planDayInfo}>
                                 <Text style={[
                                   styles.planDayName,
+                                  { color: day.completed ? colors.textMuted : colors.textHeading },
                                   day.completed && styles.planDayCompleted,
                                 ]}>
                                   {DAY_LABELS[day.dayOfWeek ?? idx]} — {day.isRestDay ? 'Rest Day' : (day.workoutName || 'Workout')}
                                 </Text>
                                 {!day.isRestDay && (
-                                  <Text style={styles.planDayDetail}>
+                                  <Text style={[styles.planDayDetail, { color: colors.textMuted }]}>
                                     {day.exercises?.length || 0} exercises • ~{day.estimatedDuration || 45} min
                                   </Text>
                                 )}
                               </View>
                               {!day.isRestDay && (
                                 day.completed ? (
-                                  <Text style={styles.planDayCheck}>✓</Text>
+                                  <Text style={[styles.planDayCheck, { color: colors.success }]}>✓</Text>
                                 ) : (
-                                  <Text style={styles.planDayArrow}>›</Text>
+                                  <Text style={[styles.planDayArrow, { color: colors.textMuted }]}>›</Text>
                                 )
                               )}
                             </TouchableOpacity>
                           ))}
                         </View>
 
-                        {/* Action buttons */}
-                        <View style={styles.planActionButtons}>
+                        <View style={[styles.planActionButtons, { borderTopColor: colors.border }]}>
                           <TouchableOpacity
-                            style={styles.planActionBtn}
+                            style={[styles.planActionBtn, { backgroundColor: colors.divider }]}
                             onPress={() => {
                               setShowPlanActions(null);
                               navigation.navigate('CreatePlan', { planId: plan.id });
                             }}
                           >
-                            <Text style={styles.planActionBtnText}>✎ Edit</Text>
+                            <Text style={[styles.planActionBtnText, { color: colors.textPrimary }]}>✎ Edit</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={[styles.planActionBtn, styles.planActionDelete]}
+                            style={[styles.planActionBtn, styles.planActionDelete, { borderColor: colors.error }]}
                             onPress={() => {
                               Alert.alert(
                                 'Delete Routine',
@@ -550,7 +532,7 @@ export default function FitnessScreen({ navigation }) {
                               );
                             }}
                           >
-                            <Text style={styles.planActionDeleteText}>✕ Delete</Text>
+                            <Text style={[styles.planActionDeleteText, { color: colors.error }]}>✕ Delete</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -565,7 +547,7 @@ export default function FitnessScreen({ navigation }) {
         {/* ── Templates quick-access (always visible) ─────────── */}
         {templates.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing['2xl'] }]}>
               Templates
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -573,13 +555,12 @@ export default function FitnessScreen({ navigation }) {
                 {templates.map((tmpl, idx) => (
                   <Card
                     key={idx}
-                    backgroundColor={Colors.white}
                     style={styles.marginBottomSm}
                     contentStyle={styles.templateMiniCard}
                     onPress={() => navigation.navigate('CreatePlan', { template: tmpl })}
                   >
-                    <Text style={styles.templateMiniName}>{tmpl.name}</Text>
-                    <Text style={styles.templateMiniDays}>
+                    <Text style={[styles.templateMiniName, { color: colors.accent }]}>{tmpl.name}</Text>
+                    <Text style={[styles.templateMiniDays, { color: colors.textSecondary }]}>
                       {tmpl.days?.length || 0} days
                     </Text>
                   </Card>
@@ -589,12 +570,8 @@ export default function FitnessScreen({ navigation }) {
           </>
         )}
 
-        {/* ── Exercise Library ─────────────────────────────────
-            Position of the filter strip + 2-column grid + empty
-            state lives in `components/ExerciseLibrary.js`. Caller
-            wires the filter state (`selectedGroup`/`onSelectGroup`)
-            and the navigation (`onPressExercise`). */}
-        <Text style={[styles.sectionTitle, { marginTop: Spacing['2xl'] }]}>
+        {/* ── Exercise Library ───────────────────────────────── */}
+        <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: Spacing['2xl'] }]}>
           Exercise Library
         </Text>
         <ExerciseLibrary
@@ -613,231 +590,175 @@ export default function FitnessScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.offWhite },
-  // ── Error Banner ────────────────────────────────────────
-  errorBanner: {
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  errorText: {
-    ...Typography.caption,
-    color: Colors.error,
-    flex: 1,
-  },
-  errorRetry: {
-    ...Typography.captionMedium,
-    color: Colors.error,
-    marginLeft: Spacing.md,
-  },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.offWhite },
-  // ── Header ─────────────────────────────────────────────────
-  header: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Layout.screenTopPadding,
-    paddingBottom: Spacing.lg,
-    backgroundColor: Colors.white,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  headerTitleGroup: { flex: 1 },
-  headerTitle: { ...Typography.h1, color: Colors.black },
-  headerSub: { ...Typography.bodySmall, color: Colors.textSecondary, marginTop: Spacing.xs },
-  headerCreateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    marginTop: Spacing.xs,
-    gap: Spacing.xs,
-    ...Shadows.sm,
-  },
-  headerCreateBtnIcon: {
-    fontSize: 18,
-    color: Colors.white,
-    fontWeight: '700',
-  },
-  headerCreateBtnText: {
-    ...Typography.captionMedium,
-    color: Colors.white,
-    fontWeight: '700',
-  },
-  headerCreateBtnDisabled: { opacity: 0.5 },
-  // ── Scroll ─────────────────────────────────────────────────
-  scrollContent: { padding: Spacing.xl },
-  sectionTitle: { ...Typography.bodyMedium, color: Colors.black, marginBottom: Spacing.md },
-  marginBottom: {
-    marginBottom: Spacing.lg,
-  },
-  marginBottomSm: {
-    marginBottom: Spacing.sm,
-  },
-  // ── Existing Plans ────────────────────────────────────────
-  existingPlansSection: { marginTop: Spacing.lg },
-  planCard: {
-    overflow: 'hidden',
-  },
-  planCardMain: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.xl,
-  },
-  planCardLeft: { flex: 1 },
-  planName: { ...Typography.captionMedium, color: Colors.black, fontWeight: '700' },
-  planMeta: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
-  planExpand: { ...Typography.bodyMedium, color: Colors.textMuted, paddingLeft: Spacing.md },
-  planActions: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  // ── Plan metadata section inside expanded card ────────────
-  planMetadataSection: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  // ── Workout days list inside expanded plan card ────────────
-  planDaysList: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
-  },
-  planDaysListTitle: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: Spacing.sm,
-  },
-  planDayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  planDayDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 2,
-  },
-  planDayDotActive: { backgroundColor: Colors.primary },
-  planDayDotCompleted: { backgroundColor: Colors.success || '#22C55E' },
-  planDayDotRest: { backgroundColor: Colors.gray300 },
-  planDayInfo: { flex: 1 },
-  planDayName: { ...Typography.captionMedium, color: Colors.black, fontWeight: '600' },
-  planDayDetail: { ...Typography.caption, color: Colors.textMuted, marginTop: 2 },
-  planDayArrow: {
-    fontSize: 22,
-    color: Colors.textMuted,
-    fontWeight: '300',
-    marginLeft: Spacing.sm,
-  },
-  planDayCheck: {
-    fontSize: 18,
-    color: Colors.success || '#22C55E',
-    fontWeight: '700',
-    marginLeft: Spacing.sm,
-  },
-  planDayCompleted: {
-    color: Colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  // ── Action buttons row ─────────────────────────────────────
-  planActionButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.xl,
-    paddingTop: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  planActionBtn: {
-    backgroundColor: Colors.gray100,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-  },
-  planActionBtnText: { ...Typography.caption, color: Colors.textPrimary },
-  planActionDelete: { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.error },
-  planActionDeleteText: { ...Typography.caption, color: Colors.error, fontWeight: '600' },
-  planActionActivate: { backgroundColor: '#FFF8E1', borderWidth: 1, borderColor: '#F57F17' },
-  planActionActivateText: { ...Typography.caption, color: '#F57F17', fontWeight: '700' },
-  // ── Templates Mini ─────────────────────────────────────────
-  templateRow: { flexDirection: 'row', gap: Spacing.sm },
-  templateMiniCard: {
-    padding: Spacing.lg,
-    width: 140,
-    alignItems: 'center',
-  },
-  templateMiniName: { ...Typography.captionMedium, color: Colors.primary, textAlign: 'center', fontWeight: '700' },
-  templateMiniDays: { ...Typography.caption, color: Colors.textSecondary, marginTop: 4 },
-  // ── Ask Mimi Card ────────────────────────────────────────────
-  // Outlined variant — transparent fill with a 2px primary border.
-  mimiCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
-  },
-  mimiTextWrap: { flex: 1, marginHorizontal: Spacing.md },
-  mimiCardTitle: { ...Typography.h4, color: Colors.primary, fontWeight: '700' },
-  mimiCardSub: { ...Typography.caption, color: Colors.textSecondary, marginTop: 2 },
-  mimiCardArrow: { fontSize: 24, color: Colors.primary, fontWeight: '700' },
-  // ── Mode Badge ───────────────────────────────────────────────
-  planNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  modeBadge: {
-    backgroundColor: Colors.gray100,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-  },
-  modeBadgeBulking: { backgroundColor: '#E3F2FD' },
-  modeBadgeLeaning: { backgroundColor: '#FFF3E0' },
-  modeBadgeText: { ...Typography.caption, color: Colors.textSecondary, fontWeight: '600', textTransform: 'capitalize' },
-  modeBadgeBulkingText: { color: '#1565C0' },
-  modeBadgeLeaningText: { color: '#E65100' },
-  planGoalExpanded: { ...Typography.caption, color: Colors.textSecondary, marginTop: Spacing.xs, lineHeight: 18 },
-  routineTypeBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-  },
-  routineTypeBadgeText: { ...Typography.caption, color: '#2E7D32', fontWeight: '600', fontSize: 10 },
-  oneTimeBadge: {
-    backgroundColor: '#FFF8E1',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-  },
-  oneTimeBadgeText: { ...Typography.caption, color: '#F57F17', fontWeight: '600', fontSize: 10 },
-  // ── Active Badge ───────────────────────────────────────────
-  activeBadge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: '#1565C0',
-  },
-  activeBadgeText: { ...Typography.caption, color: '#1565C0', fontWeight: '700', fontSize: 10 },
-});
+function makeStyles(theme) {
+  const { colors } = theme;
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    errorBanner: {
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    errorText: { ...Typography.caption, flex: 1 },
+    errorRetry: { ...Typography.captionMedium, marginLeft: Spacing.md },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    header: {
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Layout.screenTopPadding,
+      paddingBottom: Spacing.lg,
+    },
+    headerTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    headerTitleGroup: { flex: 1 },
+    headerTitle: { ...Typography.h1 },
+    headerSub: { ...Typography.bodySmall, marginTop: Spacing.xs },
+    headerCreateBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: BorderRadius.full,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+      marginTop: Spacing.xs,
+      gap: Spacing.xs,
+    },
+    headerCreateBtnIcon: { fontSize: 18, fontWeight: '700' },
+    headerCreateBtnText: { ...Typography.captionMedium, fontWeight: '700' },
+    headerCreateBtnDisabled: { opacity: 0.5 },
+    scrollContent: { padding: Spacing.xl },
+    sectionTitle: { ...Typography.bodyMedium, marginBottom: Spacing.md },
+    marginBottom: { marginBottom: Spacing.lg },
+    marginBottomSm: { marginBottom: Spacing.sm },
+    existingPlansSection: { marginTop: Spacing.lg },
+    planCard: { overflow: 'hidden' },
+    planCardMain: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: Spacing.xl,
+    },
+    planCardLeft: { flex: 1 },
+    planName: { ...Typography.captionMedium, fontWeight: '700' },
+    planMeta: { ...Typography.caption, marginTop: 2 },
+    planExpand: { ...Typography.bodyMedium, paddingLeft: Spacing.md },
+    planActions: { borderTopWidth: 1 },
+    planMetadataSection: {
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.lg,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.sm,
+    },
+    planDaysList: {
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.lg,
+      paddingBottom: Spacing.sm,
+    },
+    planDaysListTitle: {
+      ...Typography.caption,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: Spacing.sm,
+    },
+    planDayRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Spacing.sm,
+      gap: Spacing.sm,
+    },
+    planDayDot: { width: 8, height: 8, borderRadius: 4, marginTop: 2 },
+    planDayInfo: { flex: 1 },
+    planDayName: { ...Typography.captionMedium, fontWeight: '600' },
+    planDayDetail: { ...Typography.caption, marginTop: 2 },
+    planDayArrow: { fontSize: 22, fontWeight: '300', marginLeft: Spacing.sm },
+    planDayCheck: { fontSize: 18, fontWeight: '700', marginLeft: Spacing.sm },
+    planDayCompleted: { textDecorationLine: 'line-through' },
+    planActionButtons: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
+      paddingTop: Spacing.lg,
+      borderTopWidth: 1,
+    },
+    planActionBtn: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.sm,
+    },
+    planActionBtnText: { ...Typography.caption },
+    planActionDelete: { backgroundColor: 'transparent', borderWidth: 1 },
+    planActionDeleteText: { ...Typography.caption, fontWeight: '600' },
+    planActionActivate: {
+      backgroundColor: '#FFF8E1',
+      borderWidth: 1,
+      borderColor: '#F57F17',
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.sm,
+    },
+    planActionActivateText: { ...Typography.caption, color: '#F57F17', fontWeight: '700' },
+    templateRow: { flexDirection: 'row', gap: Spacing.sm },
+    templateMiniCard: {
+      padding: Spacing.lg,
+      width: 140,
+      alignItems: 'center',
+    },
+    templateMiniName: { ...Typography.captionMedium, textAlign: 'center', fontWeight: '700' },
+    templateMiniDays: { ...Typography.caption, marginTop: 4 },
+    mimiCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+      borderRadius: BorderRadius.lg,
+      borderWidth: 2,
+      padding: Spacing.xl,
+      marginBottom: Spacing.lg,
+    },
+    mimiTextWrap: { flex: 1, marginHorizontal: Spacing.md },
+    mimiCardTitle: { ...Typography.h4, fontWeight: '700' },
+    mimiCardSub: { ...Typography.caption, marginTop: 2 },
+    mimiCardArrow: { fontSize: 24, fontWeight: '700' },
+    planNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    modeBadge: {
+      backgroundColor: colors.divider,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.sm,
+    },
+    modeBadgeBulking: { backgroundColor: '#E3F2FD' },
+    modeBadgeLeaning: { backgroundColor: '#FFF3E0' },
+    modeBadgeText: { ...Typography.caption, fontWeight: '600', textTransform: 'capitalize', color: colors.textSecondary },
+    modeBadgeBulkingText: { color: '#1565C0' },
+    modeBadgeLeaningText: { color: '#E65100' },
+    planGoalExpanded: { ...Typography.caption, marginTop: Spacing.xs, lineHeight: 18 },
+    routineTypeBadge: {
+      backgroundColor: '#E8F5E9',
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.sm,
+    },
+    routineTypeBadgeText: { ...Typography.caption, color: '#2E7D32', fontWeight: '600', fontSize: 10 },
+    oneTimeBadge: {
+      backgroundColor: '#FFF8E1',
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.sm,
+    },
+    oneTimeBadgeText: { ...Typography.caption, color: '#F57F17', fontWeight: '600', fontSize: 10 },
+    activeBadge: {
+      backgroundColor: '#E3F2FD',
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.sm,
+      borderWidth: 1,
+      borderColor: '#1565C0',
+    },
+    activeBadgeText: { ...Typography.caption, color: '#1565C0', fontWeight: '700', fontSize: 10 },
+  });
+}

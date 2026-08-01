@@ -42,10 +42,9 @@
 
 import React from 'react';
 import { Text, View, Platform } from 'react-native';
-import Colors from './colors';
-
+/** Always returns white (#FFFFFF) — the outline color for text strokes. */
 function outlineColor() {
-  return Colors.textWhite;
+  return '#FFFFFF';
 }
 
 // Four cardinal-direction overlays — the absolute position delta for

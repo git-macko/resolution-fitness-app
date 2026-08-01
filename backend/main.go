@@ -34,6 +34,10 @@ func main() {
 
 	// ── Step 3: Initialize auth & middleware ──────────────────────
 	handlers.InitAuth(cfg.JWTSecret)
+	handlers.InitGeminiKey(cfg.GeminiKey)
+	handlers.InitGeminiModel(cfg.GeminiModel)
+	handlers.InitGooglePlacesKey(cfg.GooglePlacesAPIKey)
+	handlers.InitOverpassAPIURL(cfg.OverpassAPIURL)
 	middleware.InitMiddleware(cfg.JWTSecret)
 
 	// ── Step 4: Seed the database with initial data ───────────────
@@ -60,8 +64,17 @@ func main() {
 	mux.Handle("POST /api/profile/picture", protect(handlers.UploadProfilePic))
 	mux.Handle("GET /api/profile/settings", protect(handlers.GetSettings))
 	mux.Handle("PUT /api/profile/settings", protect(handlers.UpdateSettings))
+	mux.Handle("GET /api/profile/gym", protect(handlers.GetUserGym))
+	mux.Handle("PUT /api/profile/gym", protect(handlers.UpdateUserGym))
+	mux.Handle("POST /api/profile/gym/refresh-hours", protect(handlers.RefreshGymHours))
 	mux.Handle("DELETE /api/profile", protect(handlers.DeleteAccount))
 	mux.Handle("POST /api/profile/onboarding", protect(handlers.CompleteOnboarding))
+
+	// --- Gym crowd (protected) ---
+	mux.Handle("GET /api/gym-crowd", protect(handlers.GetGymCrowd))
+	mux.Handle("POST /api/gym-crowd/report", protect(handlers.ReportGymCrowd))
+	mux.Handle("GET /api/gyms/search", protect(handlers.SearchGyms))
+	mux.Handle("GET /api/gyms/details", protect(handlers.GetGymDetails))
 
 	// --- Exercise Library routes ---
 	mux.HandleFunc("GET /api/exercises", handlers.GetExercises)
@@ -117,11 +130,18 @@ func main() {
 	// --- Dashboard route (protected) ---
 	mux.Handle("GET /api/dashboard", protect(handlers.GetDashboard))
 
+	// --- Quotes & Facts (protected) ---
+	mux.Handle("GET /api/quotes", protect(handlers.GetRandomQuote))
+	mux.Handle("GET /api/facts", protect(handlers.GetRandomFact))
+
 	// --- AI Chat routes (protected) ---
 	mux.Handle("POST /api/chat", protect(handlers.Chat))
+	mux.Handle("POST /api/chat/stream", protect(handlers.ChatStream))
+	mux.Handle("POST /api/chat/plan", protect(handlers.ChatPlan))
 	mux.Handle("GET /api/chat/history", protect(handlers.GetChatHistory))
 	mux.Handle("GET /api/chat/suggestions", protect(handlers.GetChatSuggestions))
 	mux.Handle("DELETE /api/chat/history", protect(handlers.ClearChatHistory))
+	mux.Handle("DELETE /api/chat/history/{messageId}", protect(handlers.DeleteChatMessage))
 
 	// --- Static file serving for uploads ---
 	// Files uploaded by users (profile pics, food photos) are served publicly.
