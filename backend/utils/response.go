@@ -67,11 +67,4 @@ func WriteError(w http.ResponseWriter, status int, message string) {
 	WriteJSON(w, status, models.ErrorResponse{Error: message})
 }
 
-// WriteErrorWithCode sends an error response with an optional error code
-// for programmatic handling by the mobile client.
-func WriteErrorWithCode(w http.ResponseWriter, status int, message, code string) {
-	WriteJSON(w, status, models.ErrorResponse{
-		Error: message,
-		Code:  code,
-	})
-}
+

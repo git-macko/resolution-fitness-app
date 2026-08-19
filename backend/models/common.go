@@ -71,12 +71,6 @@ const (
 
 // ── Helper types ─────────────────────────────────────────────────────
 
-// NullableString handles JSON fields that can be null or omitted.
-type NullableString struct {
-	Value   string
-	IsValid bool
-}
-
 // JSONString represents a JSON-encoded array stored as TEXT in SQLite.
 // Example: "[\"peanuts\", \"dairy\"]" stored in the allergies column.
 type JSONString string

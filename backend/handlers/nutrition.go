@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
-	"strconv"
 
 	"resolution-fitnessapp-backend/database"
 	"resolution-fitnessapp-backend/models"
@@ -591,6 +590,3 @@ func safeDiv(a, b float64) float64 {
 	}
 	return a / b
 }
-
-// Ensure strconv is used
-var _ = strconv.Itoa
