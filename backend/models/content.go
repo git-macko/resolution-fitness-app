@@ -51,6 +51,28 @@ type DashboardData struct {
 
 	// GymCrowd shows the user's gym crowd estimate.
 	GymCrowd *GymCrowdInfo `json:"gymCrowd,omitempty"`
+
+	// BuildInspiration is the user's inspiration photo carousel.
+	BuildInspiration BuildInspiration `json:"buildInspiration"`
+
+	// NutritionSuggestions are personalized food ideas for the dashboard
+	// nutrition card, ranked by the user's fitness goal.
+	NutritionSuggestions []MealSuggestion `json:"nutritionSuggestions,omitempty"`
+}
+
+// ── Build Inspiration ────────────────────────────────────────────────
+// BuildInspiration powers the dashboard "Build Inspiration" card:
+// a carousel of up to 3 user-uploaded photos.
+type BuildInspiration struct {
+	// Photos are the user's own uploaded inspiration photos (max 3).
+	Photos []InspirationPhoto `json:"photos"`
+}
+
+// InspirationPhoto is a single slide in the Build Inspiration carousel.
+type InspirationPhoto struct {
+	ID        string `json:"id"`
+	PhotoURL  string `json:"photoUrl"`
+	CreatedAt string `json:"createdAt,omitempty"`
 }
 
 // ── Dashboard Sub-types ──────────────────────────────────────────────

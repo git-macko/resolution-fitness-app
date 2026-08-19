@@ -1174,8 +1174,10 @@ func TestFoodScan_SimulatedFallback(t *testing.T) {
 		if fd.Name == "" {
 			t.Errorf("FoodDetails[%d].Name is empty", i)
 		}
-		if fd.Calories <= 0 {
-			t.Errorf("FoodDetails[%d].Calories should be > 0, got %d", i, fd.Calories)
+		// Some combos include zero-calorie items (e.g. sparkling water), so
+		// only reject negative values — a 0 is a legitimate per-food entry.
+		if fd.Calories < 0 {
+			t.Errorf("FoodDetails[%d].Calories should be >= 0, got %d", i, fd.Calories)
 		}
 		if fd.HealthBenefit == "" {
 			t.Errorf("FoodDetails[%d].HealthBenefit is empty", i)

@@ -343,7 +343,7 @@ function MainTabs() {
           paddingTop: 8,
           ...Platform.select({
             ios: {
-              shadowColor: '#000',
+              shadowColor: colors.shadow,
               shadowOffset: { width: 0, height: -2 },
               shadowOpacity: 0.06,
               shadowRadius: 8,

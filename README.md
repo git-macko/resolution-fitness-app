@@ -48,12 +48,12 @@ Configure the backend URL in `mobile/src/api/config.js`.
 
 ```bash
 cd Resolution-fitnessapp/backend
-go test ./... -v   # 37 tests (workouts, chat, gym)
+go test ./... -v   # 57 tests (workouts, chat, gym, badges, food-scan, migrations, goals, db-path, exercise images)
 ```
 
 ```bash
 cd Resolution-fitnessapp/mobile
-npx jest            # 20 tests (theme utils, screens)
+npx jest            # 33 tests (theme utils, screens incl. Health Quick Log)
 ```
 
 ---
@@ -71,6 +71,9 @@ npx jest            # 20 tests (theme utils, screens)
 ### 📊 Workout Execution
 - Start workouts from plan days or ad-hoc
 - Set-by-set tracking with rest timers
+- **Workout visuals** — AI-generated exercise illustrations via Gemini 2.5 Flash Image, cached locally
+- **Exercise Library** — 25+ exercises with filter/search, AI images generated on-demand or in batch
+- **Rest screens** — breathing overlay with motivational quotes and skip control
 - Complete & log → updates XP, streaks, and levels
 - Paginated workout history
 
@@ -91,10 +94,13 @@ npx jest            # 20 tests (theme utils, screens)
 - **Food photo analysis** via Google Gemini Vision API
 - Ingredient breakdown, health score, and allergen flags per scan
 - Scan history with saved analyses
-- Daily nutrition dashboard with macro tracking
-- Preworkout / Postworkout / General meal categorization
+- **Quick food log** — enter calories, protein, carbs, fat & water; totals add up toward your goals with progress bars
+- **Personalized goals** — calorie/protein/water targets assessed from height & weight captured at registration, editable in Settings or via the Body Stats card on the Account & Health tabs
+- **No-update days** — days without any logged food or water are marked "No update" on the Health tab
+- Preworkout / Postworkout / General meal categorization (with delete)
 - Water intake tracker
-- Meal suggestions filtered by allergies & dietary preferences
+- **Pre/Post Meal Selection** — add goal-ranked suggestions straight to the food log, or log a custom meal
+- Meal suggestions filtered by allergies, dietary preferences & ranked by goal
 - Weekly nutrition summaries
 
 ### 📏 Body Tracking
@@ -112,8 +118,9 @@ npx jest            # 20 tests (theme utils, screens)
 ### 👤 Account
 - JWT authentication (register, login, token refresh)
 - Profile management with photo upload
-- Onboarding (fitness level, goals, allergies)
+- Onboarding (fitness level, goals, body stats → daily calorie/protein/water goal assessment, allergies)
 - Settings (units, notifications, rest timers, targets)
+- **Progression Badges** — Rookie 🐣, Casual Goer 🏋️, Motivated Temporarily ⚡, Gym Rat 🐀 earned from workouts & nutrition tracking
 - Account deletion
 
 ---
@@ -144,7 +151,7 @@ Resolution-fitnessapp/
 │   ├── models/                 # Data structures
 │   ├── utils/                  # Response helpers, validation, dates
 │   ├── Makefile                # Build / test / run targets
-│   └── handlers/*_test.go      # 37 unit + integration tests (workouts, chat, gym)
+│   └── handlers/*_test.go      # 46 unit + integration tests (workouts, chat, gym, badges, food-scan, goals)
 │
 ├── mobile/                     # React Native (Expo)
 │   ├── App.js                  # Root entry (splash + theme + auth providers)
@@ -171,6 +178,7 @@ Resolution-fitnessapp/
 | Workouts | `POST /api/workouts`, `POST /api/workouts/{id}/complete` |
 | Nutrition | `GET /api/nutrition/daily`, `POST /api/nutrition/meals` |
 | Food Scan | `POST /api/food-scan` (photo → AI analysis) |
+| Badges | `GET /api/badges` (behavior-based progression) |
 | Dashboard | `GET /api/dashboard` (aggregated data) |
 | Gym | `GET /api/gym-crowd`, `POST /api/gym-crowd/report` |
 | Chat | `POST /api/chat` (AI Coach), `POST /api/chat/stream` (SSE) |

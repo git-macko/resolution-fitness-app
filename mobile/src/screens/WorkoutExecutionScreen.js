@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, Image,
   Modal, TextInput, Animated, Dimensions, Pressable, KeyboardAvoidingView, Platform,
   PanResponder,
 } from 'react-native';
@@ -16,6 +16,7 @@ import api from '../api/client';
 import { useTheme } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows, Layout } from '../theme/spacing';
+import BreathingVisual from '../components/BreathingVisual';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -79,8 +80,8 @@ const SwipeableSetRow = React.memo(function SwipeableSetRow({ children, onUndo, 
   return (
     <View style={styles.swipeContainer}>
       {/* Undo action revealed behind the row */}
-      <View style={styles.swipeUndoBg}>
-        <Text style={styles.swipeUndoText}>↩ Undo</Text>
+      <View style={[styles.swipeUndoBg, { backgroundColor: colors.error }]}>
+        <Text style={[styles.swipeUndoText, { color: colors.heroText }]}>↩ Undo</Text>
       </View>
       {/* The actual row, animated */}
       <Animated.View
@@ -90,6 +91,32 @@ const SwipeableSetRow = React.memo(function SwipeableSetRow({ children, onUndo, 
         {children}
       </Animated.View>
     </View>
+  );
+});
+
+// ── ExerciseVisual ─────────────────────────────────────────────
+// Shows the exercise's demo image/GIF (seeded from the exercise
+// library) with a graceful emoji fallback if it's missing or fails
+// to load. This gives the workout screen its "workout visuals".
+const ExerciseVisual = React.memo(function ExerciseVisual({ imageUrl, colors }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!imageUrl || failed) {
+    return (
+      <View style={[styles.visualFallback, { backgroundColor: colors.accentBg }]}>
+        <Text style={styles.visualFallbackEmoji}>🏋️</Text>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: imageUrl }}
+      style={[styles.visualImage, { backgroundColor: colors.divider }]}
+      resizeMode="cover"
+      onError={() => setFailed(true)}
+      accessibilityLabel="Exercise demonstration"
+    />
   );
 });
 
@@ -103,6 +130,8 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
   const [sessionTimer, setSessionTimer] = useState(0);
   const timerRef = useRef(null);
   const sessionTimerRef = useRef(null);
+  const [breathingPattern, setBreathingPattern] = useState('box');
+  const [restQuote, setRestQuote] = useState(null);
 
   // ── Set Logging State ────────────────────────────────────────────
   // Track the active (next-to-do) set index per exercise.
@@ -133,6 +162,16 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
 
   useEffect(() => {
     startSession();
+    // Fetch breathing pattern preference
+    api.getSettings().then((data) => {
+      const s = data.data || data || {};
+      if (s.breathingPattern) setBreathingPattern(s.breathingPattern);
+    }).catch(() => {});
+    // Fetch a motivational quote to show during rest periods
+    api.getRandomQuote().then((data) => {
+      const q = data.data || data || {};
+      if (q && q.text) setRestQuote({ text: q.text, author: q.author });
+    }).catch(() => {});
     return () => {
       clearInterval(timerRef.current);
       clearInterval(sessionTimerRef.current);
@@ -183,14 +222,18 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
           try {
             const detail = await api.getExercise(exId);
             const exData = detail.data || detail;
-            if (exData.instructions?.length || exData.tips?.length) {
+            // Capture instructions, tips, AND the demo image/GIF so the
+            // workout screen can show a visual of the exercise.
+            if (exData.instructions?.length || exData.tips?.length || exData.imageUrl || exData.gifUrl) {
               tipsMap[exId] = {
                 instructions: exData.instructions || [],
                 tips: exData.tips || [],
+                imageUrl: exData.imageUrl || '',
+                gifUrl: exData.gifUrl || '',
               };
             }
           } catch {
-            // Non-blocking — tips are optional
+            // Non-blocking — tips/visuals are optional
           }
         }),
       ).then(() => {
@@ -476,7 +519,7 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
 
       {/* ── Set Confirmation Modal ───────────────────────────── */}
       <Modal visible={modalVisible} transparent animationType="none" onRequestClose={handleCancelSet}>
-        <Pressable style={styles.modalBackdrop} onPress={handleCancelSet}>
+        <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.scrim }]} onPress={handleCancelSet}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalKeyboardWrap}
@@ -575,6 +618,57 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
+      {/* ── Rest Screen (full-screen breathing overlay) ──────── */}
+      {/* Automatically appears after every completed set while the
+          rest timer counts down. The breathing visual guides recovery. */}
+      {resting && restTimer > 0 && (
+        <View style={[styles.restScreen, { backgroundColor: colors.background }]}>
+          {/* Top row: label + timer */}
+          <View style={styles.restTopRow}>
+            <Text style={[styles.restLabel, { color: colors.accent }]}>REST</Text>
+            <Text style={[styles.restTimerBig, { color: colors.textPrimary }]}>
+              {formatTime(restTimer)}
+            </Text>
+          </View>
+
+          {/* Breathing visual + motivational quote */}
+          <View style={styles.restBreathingWrap}>
+            <BreathingVisual patternId={breathingPattern} circleSize={200} />
+            {restQuote ? (
+              <View style={styles.restQuoteWrap}>
+                <Text
+                  style={[styles.restQuoteText, { color: colors.textPrimary }]}
+                  numberOfLines={3}
+                >
+                  “{restQuote.text}”
+                </Text>
+                {restQuote.author ? (
+                  <Text style={[styles.restQuoteAuthor, { color: colors.accent }]}>
+                    — {restQuote.author}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+
+          {/* Next set hint */}
+          {currentExercise && (
+            <Text style={[styles.restNextText, { color: colors.textMuted }]} numberOfLines={1}>
+              Next: {currentExercise.exerciseName || currentExercise.name} · Set {activeSetIdx + 1}
+            </Text>
+          )}
+
+          {/* Skip button */}
+          <TouchableOpacity
+            style={[styles.restSkipBtn, { borderColor: colors.accent }]}
+            onPress={skipRest}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.restSkipText, { color: colors.accent }]}>Skip Rest</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* ── Exercise Content ─────────────────────────────────── */}
       {currentExercise && (
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -588,6 +682,17 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
           <Text style={[styles.muscleGroup, { color: colors.textMuted }]}>
             {currentExercise.muscleGroup}
           </Text>
+
+          {/* ── Exercise visual ──────────────────────────────────── */}
+          {(() => {
+            const exId = currentExercise.exerciseId || currentExercise.id;
+            const visual = exerciseTips[exId];
+            const imageUrl =
+              (visual && (visual.gifUrl || visual.imageUrl)) ||
+              currentExercise.imageUrl ||
+              '';
+            return <ExerciseVisual imageUrl={imageUrl} colors={colors} />;
+          })()}
 
           {/* ── Exercise Tips / Instructions ──────────────────────── */}
           {(() => {
@@ -698,10 +803,6 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
             const defaultReps = setData?.reps || currentExercise?.targetReps || '—';
             const locked = !active && !completed;
 
-            // Insert inline rest countdown between the last completed set
-            // and the next active set
-            const showInlineRest = resting && completed && setNum === activeSetIdx - 1;
-
             const rowContent = (
               <>
                 {/* Set number with state indicator */}
@@ -795,7 +896,6 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
             }
 
             // Active / locked sets are plain TouchableOpacity
-            // with optional inline rest countdown above active set
             const activeRow = (
               <TouchableOpacity
                 key={setNum}
@@ -816,32 +916,6 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
                 {rowContent}
               </TouchableOpacity>
             );
-
-            if (showInlineRest) {
-              return (
-                <React.Fragment key={setNum}>
-                  {/* Inline rest countdown card */}
-                  <View style={[styles.inlineRestCard, { backgroundColor: colors.accentBg, borderColor: colors.accent }]}>
-                    <View style={styles.inlineRestTop}>
-                      <Text style={[styles.inlineRestLabel, { color: colors.accent }]}>REST</Text>
-                      <Text style={[styles.inlineRestTimer, { color: colors.textPrimary }]}>{formatTime(restTimer)}</Text>
-                    </View>
-                    <View style={styles.inlineRestBottom}>
-                      <Text style={[styles.inlineRestNext, { color: colors.textMuted }]}>
-                        Next: Set {activeSetIdx + 1}
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.inlineSkipBtn, { borderColor: colors.accent }]}
-                        onPress={skipRest}
-                      >
-                        <Text style={[styles.inlineSkipText, { color: colors.accent }]}>Skip</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  {activeRow}
-                </React.Fragment>
-              );
-            }
 
             return activeRow;
           })}
@@ -939,45 +1013,66 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   timerText: { ...Typography.bodyMedium, fontVariant: ['tabular-nums'] },
-  // ── Inline Rest Card ─────────────────────────────────────────
-  inlineRestCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: 1.5,
-    paddingVertical: Spacing.lg,
+  // ── Rest Screen (full-screen breathing overlay) ──────────────
+  restScreen: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    paddingTop: Layout.screenTopPadding + Spacing.lg,
     paddingHorizontal: Spacing.xl,
-    marginBottom: Spacing.sm,
+    paddingBottom: Spacing['3xl'],
   },
-  inlineRestTop: {
+  restTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
   },
-  inlineRestLabel: {
+  restLabel: {
     ...Typography.label,
-    letterSpacing: 4,
+    letterSpacing: 5,
+    fontSize: 18,
   },
-  inlineRestTimer: {
-    fontSize: 28,
+  restTimerBig: {
+    fontSize: 44,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  inlineRestBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  restBreathingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restQuoteWrap: {
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
   },
-  inlineRestNext: {
-    ...Typography.caption,
+  restQuoteText: {
+    ...Typography.bodyMedium,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 24,
   },
-  inlineSkipBtn: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  inlineSkipText: {
+  restQuoteAuthor: {
     ...Typography.captionMedium,
+    marginTop: Spacing.sm,
+    fontWeight: '600',
+  },
+  restNextText: {
+    ...Typography.bodyMedium,
+    textAlign: 'center',
+    marginBottom: Spacing['3xl'],
+  },
+  restSkipBtn: {
+    alignSelf: 'center',
+    paddingHorizontal: Spacing['3xl'],
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+  },
+  restSkipText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
   },
   // ── Legacy skip button (used in empty state) ─────────────────
   skipBtn: {
@@ -1091,7 +1186,24 @@ const styles = StyleSheet.create({
   scrollContent: { padding: Spacing.xl },
   progress: { ...Typography.caption, marginBottom: Spacing.xs },
   exerciseName: { ...Typography.h1, marginBottom: Spacing.xs },
-  muscleGroup: { ...Typography.caption, marginBottom: Spacing.xl },
+  muscleGroup: { ...Typography.caption, marginBottom: Spacing.lg },
+  visualImage: {
+    width: '100%',
+    height: 170,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.xl,
+  },
+  visualFallback: {
+    width: '100%',
+    height: 170,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visualFallbackEmoji: {
+    fontSize: 44,
+  },
   targetCard: {
     flexDirection: 'row',
     borderRadius: BorderRadius.md,

@@ -110,7 +110,7 @@ Loaded from `.env` (or process env, `.env` overrides take precedence). See
 |---|---|---|
 | `PORT` | HTTP listen port | `8080` |
 | `JWT_SECRET` | HMAC secret for signing auth tokens. **Must be a strong random string in production.** | falls back to a development placeholder (`change-me-in-production-use-a-strong-random-secret`) when unset — **do not ship to production without overriding this**. |
-| `DB_PATH` | SQLite file location | `./database.db` |
+| `DB_PATH` | SQLite file location | `./database.db` (falls back to `database.db` next to the executable when that file exists, so launching the binary from any directory opens the real backend DB) |
 | `GEMINI_API_KEY` | Power AI Coach chat + food photo analysis via Google Gemini | optional; AI endpoints fall back to simulated responses if absent |
 | `GEMINI_MODEL` | Gemini model used for chat + food scan | `gemini-3.5-flash` |
 | `BESTTIME_API_KEY` | Real gym crowd/busyness forecasts | optional; falls back to simulation |
@@ -128,12 +128,16 @@ Public:
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET  /api/exercises` / `GET /api/exercises/{id}`
+- `POST /api/exercises/{id}/generate-image` — generate AI illustration for one exercise
+- `POST /api/exercises/generate-images` — batch-generate AI images (`?muscle_group=`)
+- `GET  /api/exercises/generate-images/status` — poll batch job (`?id=`)
 - `GET  /api/workout-templates`
 
 Protected (require `Authorization: Bearer <jwt>`):
 
 - `POST /api/auth/refresh` — issue a fresh JWT using the current (still-valid) one
 - `/api/profile/**` — read, update, picture upload, settings, onboarding, delete
+- `POST /api/profile/goals` — recompute daily calorie/protein/water targets from height/weight + goal
 - `/api/plans/**` — list, create, get, update, delete, clone, activate weekly plans
 - `/api/workouts/**` — start, get, update, complete, cancel, history
 - `/api/nutrition/**` — daily, meals, water, weekly, suggestions
@@ -158,15 +162,16 @@ project root or look at the inline doc-comments above each handler in
 go test ./... -v -count=1
 ```
 
-Expected output: **37/37 PASS** in the `handlers` package (workout-plan handlers,
+Expected output: **55/55 PASS** in the `handlers` package (workout-plan handlers,
 edge cases, clone / activate semantics, auto-delete, AI Coach chat, gym crowd,
-food scan). All other packages report `[no test files]`. `go vet ./...` is also
-clean.
+progression badges, food scan, exercise image generation) plus **1/1 PASS** in the `database` package
+(migration idempotency) and **1/1 PASS** in the `config` package (DB path resolution). `go vet ./...` is also clean.
 
-Tests live in `handlers/workouts_test.go`, `handlers/chat_test.go`, and
-`handlers/gym_test.go`, and use an in-memory SQLite database
-(`database.Initialize(":memory:")`), which is a fast smoke check that the
-no-cgo driver is working in your environment.
+Tests live in `handlers/workouts_test.go`, `handlers/chat_test.go`,
+`handlers/gym_test.go`, `handlers/badges_test.go`, `handlers/inspiration_test.go`,
+`handlers/nutrition_test.go`, and `database/migrations_test.go`. The handler
+tests use an in-memory SQLite database (`database.Initialize(":memory:")`),
+which is a fast smoke check that the no-cgo driver is working in your environment.
 
 ---
 
@@ -187,7 +192,7 @@ backend/
 │   ├── workouts.go            plan + session handlers
 │   ├── gemini.go              Gemini API client (chat, streaming, food scan)
 │   ├── gym.go                 gym search/details, crowd estimates, opening hours
-│   ├── chat_test.go, gym_test.go, workouts_test.go   (37 cases, in-memory DB)
+│   ├── chat_test.go, gym_test.go, workouts_test.go, badges_test.go, inspiration_test.go, nutrition_test.go, goals_test.go  (46 cases, in-memory DB)
 │   ├── nutrition.go, food_scan.go, dashboard.go, chat.go, ...
 ├── middleware/                CORS, request logger, AuthRequired
 ├── models/                    Wire-format structs + DB row structs
@@ -205,13 +210,12 @@ sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=50
 ```
 
 On startup the `database` package runs all `CREATE TABLE IF NOT EXISTS` migrations in
-`runMigrations()`. Migrations are idempotent — safe to run on every boot. New
-migrations append additional `ALTER TABLE … ADD COLUMN …` statements that swallow
-"errors that mean the column already exists" (SQLite returns an error if the
-column exists; the code intentionally ignores those errors to keep the migration
-additive and replayable).
+`runMigrations()`. Migrations are idempotent — safe to run on every boot. Column
+additions go through `ensureColumn()`, which checks `PRAGMA table_info` first and
+only runs `ALTER TABLE … ADD COLUMN …` when the column is actually missing, so
+existing databases start with zero duplicate-column errors and no log spam.
 
-Tables: `users`, `user_settings`, `user_stats`, `user_goals`, `exercises`,
+Tables: `users`, `user_settings`, `build_inspiration`, `user_stats`, `user_goals`, `exercises`,
 `weekly_plans`, `plan_days`, `plan_exercises`, `workout_sessions`,
 `session_exercises`, `session_sets`, `food_logs`, `food_items`,
 `scanned_foods`, `water_logs`, `weight_logs`, `body_measurements`,

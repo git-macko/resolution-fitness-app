@@ -54,7 +54,37 @@ func GetDashboard(w http.ResponseWriter, r *http.Request) {
 	// ── 10. Gym Crowd ─────────────────────────────────────────────
 	dashboard.GymCrowd, _ = fetchGymCrowd(userID)
 
+	// ── 11. Build Inspiration ─────────────────────────────────────
+	dashboard.BuildInspiration = fetchBuildInspiration(userID)
+
+	// ── 12. Nutrition Suggestions (personalized by goal) ──────────
+	dashboard.NutritionSuggestions = fetchDashboardMealSuggestions(userID)
+
 	utils.WriteSuccess(w, dashboard, "Dashboard loaded")
+}
+
+// fetchDashboardMealSuggestions returns a compact, goal-ranked set of meal
+// ideas for the dashboard nutrition card. Reuses the same generator as the
+// Health tab suggestions endpoint, capped to 3 for the carousel.
+func fetchDashboardMealSuggestions(userID string) []models.MealSuggestion {
+	var allergiesJSON, dietaryJSON, primaryGoal string
+	database.DB.QueryRow(`
+		SELECT COALESCE(allergies, '[]'), COALESCE(dietary_prefs, '[]'), COALESCE(primary_goal, 'general')
+		FROM users WHERE id = ?
+	`, userID).Scan(&allergiesJSON, &dietaryJSON, &primaryGoal)
+
+	var allergies, dietaryPrefs []string
+	json.Unmarshal([]byte(allergiesJSON), &allergies)
+	json.Unmarshal([]byte(dietaryJSON), &dietaryPrefs)
+
+	suggestions := generateMealSuggestions(primaryGoal, allergies, dietaryPrefs)
+	if len(suggestions) > 3 {
+		suggestions = suggestions[:3]
+	}
+	if suggestions == nil {
+		suggestions = []models.MealSuggestion{}
+	}
+	return suggestions
 }
 
 // ── Dashboard Helper Functions ───────────────────────────────────────
@@ -394,6 +424,3 @@ func GetRandomFact(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteSuccess(w, fact, "Fact loaded")
 }
-
-// Ensure json is used
-var _ = json.Marshal

@@ -47,7 +47,7 @@ Resolution-fitnessapp/
 │   │   └── chat.go                   # AI Coach chat relay
 │   ├── middleware/middleware.go       # JWT Auth, CORS, Request Logger
 │   ├── utils/                        # response.go, validation.go, date_helpers.go
-│   ├── handlers/*_test.go            # 37 unit + integration tests (workouts, chat, gym)
+│   ├── handlers/*_test.go            # 46 unit + integration tests (workouts, chat, gym, badges, food-scan, goals)
 │   ├── uploads/                      # Static file serving (profile pics, food photos)
 │   └── database.db                   # SQLite database file (auto-created)
 │
@@ -105,7 +105,8 @@ Resolution-fitnessapp/
 ### Authentication & Profile
 - Register, Login, JWT token refresh
 - Profile CRUD with photo upload
-- Onboarding flow (fitness level, goals, allergies, dietary preferences)
+- Onboarding flow (fitness level, goals, body stats: height & weight → personalized calorie / protein / water goal assessment, allergies, dietary preferences)
+- **Progression Badges:** Rookie 🐣, Casual Goer 🏋️, Motivated Temporarily ⚡, Gym Rat 🐀 — earned from Fitness tab activity (workouts, streaks) and/or Health tab activity (meals logged, days tracked), with live progress bars on the Account tab
 - Account deletion
 
 ### Fitness Tab — Routine Management
@@ -122,6 +123,8 @@ Resolution-fitnessapp/
 ### Workout Execution
 - Start workout from plan day or ad-hoc
 - Set tracking per exercise
+- **Workout visuals:** demo image/GIF of the current exercise with emoji fallback
+- **Rest screens:** full-screen breathing overlay with a motivational quote and skip control
 - Complete workout → stats update, XP gain, streak calculation, level-up
 - Cancel/save-as-draft
 - Workout history with pagination
@@ -129,6 +132,7 @@ Resolution-fitnessapp/
 ### Exercise Library
 - 25+ exercises across chest, back, legs, shoulders, arms, core, cardio
 - Filter by muscle group, search by name
+- **AI-generated exercise illustrations** — clean fitness art via Gemini 2.5 Flash Image, cached locally
 - Full details: instructions, tips, common mistakes
 
 ### Dashboard
@@ -154,13 +158,16 @@ Resolution-fitnessapp/
 - Clear chat history
 
 ### Health Tab
-- Daily nutrition summary
-- Meal logging with preworkout/postworkout/general categorization
-- Water intake tracking
+- Daily nutrition summary with calorie/protein goal progress bars (days with no logged food or water are marked **No update**)
+- **Quick food log:** enter calories, protein, carbs, fat, and water — everything adds up toward your daily goals
+- **Personalized goals:** calorie, protein, and water targets are assessed from the height & weight captured at registration, adjustable anytime from Settings or the Body Stats shortcut cards on the Account and Health tabs
+- Meal logging with preworkout/postworkout/general categorization (with per-meal delete)
+- Water intake tracking (custom amounts via Quick Log, plus a 250ml quick-add)
+- **Pre/Post Meal Selection:** goal-ranked suggestions can be added straight to the food log as Pre-Workout / Post-Workout / General, or log a custom meal
 - Food photo scanner (camera → Go backend → Google Gemini → analysis)
 - Ingredient breakdown, health score, and allergen flags per scan
 - Scan history with saved analyses
-- Meal suggestions filtered by allergies and dietary preferences
+- Meal suggestions filtered by allergies, dietary preferences, and ranked by fitness goal
 - Weekly nutrition summary
 
 ### Tracking
@@ -210,7 +217,8 @@ These are from the original specification but deferred or simplified:
 | POST | `/api/profile/picture` | Upload profile picture |
 | GET | `/api/profile/settings` | Get settings |
 | PUT | `/api/profile/settings` | Update settings |
-| POST | `/api/profile/onboarding` | Complete onboarding |
+| POST | `/api/profile/onboarding` | Complete onboarding (incl. body stats → daily goal assessment) |
+| POST | `/api/profile/goals` | Recompute daily calorie / protein / water targets from body stats |
 | DELETE | `/api/profile` | Delete account |
 | GET | `/api/profile/gym` | Get gym preference |
 | PUT | `/api/profile/gym` | Update gym preference |
@@ -242,6 +250,9 @@ These are from the original specification but deferred or simplified:
 |--------|------|-------------|
 | GET | `/api/exercises` | List exercises (`?muscle_group=&search=`) |
 | GET | `/api/exercises/{exerciseId}` | Exercise details |
+| POST | `/api/exercises/{exerciseId}/generate-image` | Generate AI illustration for one exercise |
+| POST | `/api/exercises/generate-images` | Batch-generate AI images (`?muscle_group=`) |
+| GET | `/api/exercises/generate-images/status` | Poll batch job (`?id=`) |
 | GET | `/api/workout-templates` | Pre-built templates |
 
 ### Nutrition (protected)
@@ -277,6 +288,11 @@ These are from the original specification but deferred or simplified:
 | POST | `/api/gym-crowd/report` | Report crowd level (1–5) |
 | GET | `/api/gyms/search` | Gym autocomplete (`?q=`) |
 | GET | `/api/gyms/details` | Gym details + opening hours (`?placeId=` or `?lat=&lng=`) |
+
+### Progression Badges (protected)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/badges` | Behavior-based badges computed from Fitness + Health activity |
 
 ### Dashboard & Chat (protected)
 | Method | Path | Description |
@@ -323,11 +339,14 @@ cd Resolution-fitnessapp/backend
 go test ./... -v
 ```
 
-37 tests covering: workout-plan handlers (CreatePlan limits, SetActivePlan
+57 tests covering: workout-plan handlers (CreatePlan limits, SetActivePlan
 activation/reset, ClonePlan limits, GetPlans auto-delete, StartWorkout),
 AI Coach chat (fallback, streaming, history, plan generation), gym crowd
-(BestTime cache, community reports, opening-hours enrichment), and a
-food-scan integration test against a real image.
+(BestTime cache, community reports, opening-hours enrichment), progression
+badges (no activity, fitness activity, health-only activity), daily-goal
+recommendations (goal-aware formulas, onboarding seeding, recalculate endpoint),
+exercise image generation (single/batch/status, edge cases, mime mapping),
+and a food-scan integration test against a real image.
 
 ### Mobile
 ```bash
@@ -335,7 +354,9 @@ cd Resolution-fitnessapp/mobile
 npx jest
 ```
 
-Tests cover theme utilities and screen components (20 tests total).
+Tests cover theme utilities and screen components (33 tests total),
+including the Health tab Quick Log, goal progress, suggestion-add,
+meal-delete flows, and the no-update day state.
 
 ## Design Decisions
 

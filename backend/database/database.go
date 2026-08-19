@@ -82,6 +82,7 @@ func runMigrations() error {
 			date_of_birth   TEXT DEFAULT '',
 			gender          TEXT DEFAULT '',
 			height_cm       REAL DEFAULT 0,
+			weight_kg       REAL DEFAULT 0,
 			fitness_level   TEXT DEFAULT 'beginner',
 			primary_goal    TEXT DEFAULT 'general',
 			allergies       TEXT DEFAULT '[]',
@@ -97,46 +98,14 @@ func runMigrations() error {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
 
+	// Migration: add weight_kg for older databases (body stats collected at registration).
+	ensureColumn("users", "weight_kg", "weight_kg REAL DEFAULT 0")
+
 	// ── User Settings table ───────────────────────────────────────
 	// Separate table for app preferences. One-to-one with users.
 	// Note: legacy columns ai_model and openai_api_key_enc may still exist
 	// in older databases. They are no longer referenced by the application
 	// and can be ignored; new databases will not create them.
-	// Migration: add gym preferences columns for existing databases
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_type TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_type column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_name TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_name column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_capacity INTEGER DEFAULT 150"); err != nil {
-		log.Printf("[migrate] gym_capacity column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_address TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_address column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_place_id TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_place_id column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_lat REAL DEFAULT 0"); err != nil {
-		log.Printf("[migrate] gym_lat column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_lng REAL DEFAULT 0"); err != nil {
-		log.Printf("[migrate] gym_lng column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_phone TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_phone column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_website TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_website column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_opening_hours TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_opening_hours column: %v", err)
-	}
-	if _, err := DB.Exec("ALTER TABLE user_settings ADD COLUMN gym_hours_refresh_at TEXT DEFAULT ''"); err != nil {
-		log.Printf("[migrate] gym_hours_refresh_at column: %v", err)
-	}
-
 	if _, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS user_settings (
 			user_id              TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -165,6 +134,46 @@ func runMigrations() error {
 		);
 	`); err != nil {
 		return fmt.Errorf("failed to create user_settings table: %w", err)
+	}
+
+	// ── Migration: gym preference columns (idempotent) ────────────
+	// The CREATE TABLE above already includes these columns for new databases;
+	// ensureColumn adds them only to older databases that lack them, and
+	// skips silently when they already exist (no more duplicate-column noise).
+	gymColumns := []struct{ name, def string }{
+		{"gym_type", "TEXT DEFAULT ''"},
+		{"gym_name", "TEXT DEFAULT ''"},
+		{"gym_capacity", "INTEGER DEFAULT 150"},
+		{"gym_address", "TEXT DEFAULT ''"},
+		{"gym_place_id", "TEXT DEFAULT ''"},
+		{"gym_lat", "REAL DEFAULT 0"},
+		{"gym_lng", "REAL DEFAULT 0"},
+		{"gym_phone", "TEXT DEFAULT ''"},
+		{"gym_website", "TEXT DEFAULT ''"},
+		{"gym_opening_hours", "TEXT DEFAULT ''"},
+		{"gym_hours_refresh_at", "TEXT DEFAULT ''"},
+	}
+	for _, c := range gymColumns {
+		if _, err := ensureColumn("user_settings", c.name, c.name+" "+c.def); err != nil {
+			log.Printf("[migrate] user_settings.%s column: %v", c.name, err)
+		}
+	}
+
+	// ── Build Inspiration table ───────────────────────────────────
+	// Photos the user uploads as workout inspiration (max 3 per user).
+	if _, err := DB.Exec(`
+		CREATE TABLE IF NOT EXISTS build_inspiration (
+			id         TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			photo_url  TEXT NOT NULL,
+			source     TEXT NOT NULL DEFAULT 'user',
+			sort_order INTEGER DEFAULT 0,
+			created_at TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_build_inspiration_user ON build_inspiration(user_id);
+	`); err != nil {
+		return fmt.Errorf("failed to create build_inspiration table: %w", err)
 	}
 
 	// ── User Stats table ──────────────────────────────────────────
@@ -255,16 +264,17 @@ func runMigrations() error {
 		return fmt.Errorf("failed to create weekly_plans table: %w", err)
 	}
 
-	// ── Migration: add mode & mode_goal to existing weekly_plans ──
-	// Errors are ignored here for idempotency (column may already exist).
-	DB.Exec("ALTER TABLE weekly_plans ADD COLUMN mode TEXT DEFAULT ''")
-	DB.Exec("ALTER TABLE weekly_plans ADD COLUMN mode_goal TEXT DEFAULT ''")
-
-	// ── Migration: add routine_type ("consistent" | "one_time") ──
-	DB.Exec("ALTER TABLE weekly_plans ADD COLUMN routine_type TEXT DEFAULT 'consistent'")
-
-	// ── Migration: add is_active for routine activation tracking ──
-	DB.Exec("ALTER TABLE weekly_plans ADD COLUMN is_active INTEGER DEFAULT 0")
+	// ── Migration: weekly_plans mode/mode_goal/routine_type/is_active ──
+	// Added idempotently via ensureColumn for older databases.
+	weeklyPlanColumns := []struct{ name, def string }{
+		{"mode", "TEXT DEFAULT ''"},
+		{"mode_goal", "TEXT DEFAULT ''"},
+		{"routine_type", "TEXT DEFAULT 'consistent'"},
+		{"is_active", "INTEGER DEFAULT 0"},
+	}
+	for _, c := range weeklyPlanColumns {
+		ensureColumn("weekly_plans", c.name, c.name+" "+c.def)
+	}
 
 	// ── Plan Days table ───────────────────────────────────────────
 	// Each day within a weekly plan. Links to a plan.
@@ -310,8 +320,8 @@ func runMigrations() error {
 		return fmt.Errorf("failed to create plan_exercises table: %w", err)
 	}
 
-	// Add custom_exercise_name column if it doesn't exist (for databases created before this migration)
-	DB.Exec("ALTER TABLE plan_exercises ADD COLUMN custom_exercise_name TEXT DEFAULT ''")
+	// Add custom_exercise_name for databases created before this migration.
+	ensureColumn("plan_exercises", "custom_exercise_name", "custom_exercise_name TEXT DEFAULT ''")
 
 	// ── Workout Sessions table ────────────────────────────────────
 	// Records of actual workout executions.
@@ -443,12 +453,10 @@ func runMigrations() error {
 		return fmt.Errorf("failed to create scanned_foods table: %w", err)
 	}
 
-	// Migration: add food_details column for existing databases
-	DB.Exec("ALTER TABLE scanned_foods ADD COLUMN food_details TEXT DEFAULT '[]'")
-
-	// Migration: add name and ingredients columns for existing databases
-	DB.Exec("ALTER TABLE scanned_foods ADD COLUMN name TEXT DEFAULT ''")
-	DB.Exec("ALTER TABLE scanned_foods ADD COLUMN ingredients TEXT DEFAULT '[]'")
+	// Migration: add food_details, name, and ingredients for older databases.
+	ensureColumn("scanned_foods", "food_details", "food_details TEXT DEFAULT '[]'")
+	ensureColumn("scanned_foods", "name", "name TEXT DEFAULT ''")
+	ensureColumn("scanned_foods", "ingredients", "ingredients TEXT DEFAULT '[]'")
 
 	// ── Water Logs table ──────────────────────────────────────────
 	// Track daily water intake — each entry is typically 250ml (one glass).
@@ -613,6 +621,38 @@ func runMigrations() error {
 	}
 
 	return nil
+}
+
+// ensureColumn adds a column to a table only if it does not already exist.
+// Table and column names come from hardcoded migration DDL (never user input),
+// so it is safe to interpolate them into PRAGMA/ALTER statements.
+// Returns true if the column was added, false if it already existed.
+func ensureColumn(table, column, definition string) (bool, error) {
+	rows, err := DB.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return false, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	if _, err := DB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, definition)); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Close cleanly shuts down the database connection pool.

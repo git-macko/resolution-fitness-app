@@ -89,11 +89,11 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	_, err := database.DB.Exec(`
 		UPDATE users SET
 			display_name = ?, phone_number = ?, date_of_birth = ?,
-			gender = ?, height_cm = ?, fitness_level = ?, primary_goal = ?,
+			gender = ?, height_cm = ?, weight_kg = ?, fitness_level = ?, primary_goal = ?,
 			allergies = ?, dietary_prefs = ?, updated_at = datetime('now')
 		WHERE id = ?
 	`, req.DisplayName, req.PhoneNumber, req.DateOfBirth,
-		req.Gender, req.HeightCm, req.FitnessLevel, req.PrimaryGoal,
+		req.Gender, req.HeightCm, req.WeightKg, req.FitnessLevel, req.PrimaryGoal,
 		string(allergiesJSON), string(dietaryPrefsJSON),
 		userID)
 
@@ -326,6 +326,9 @@ func CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 		DisplayName  string   `json:"displayName"`
 		FitnessLevel string   `json:"fitnessLevel"`
 		PrimaryGoal  string   `json:"primaryGoal"`
+		Gender       string   `json:"gender,omitempty"`
+		HeightCm     float64  `json:"heightCm,omitempty"`
+		WeightKg     float64  `json:"weightKg,omitempty"`
 		Allergies    []string `json:"allergies"`
 		DietaryPrefs []string `json:"dietaryPrefs"`
 	}
@@ -336,18 +339,29 @@ func CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 
 	_, err := database.DB.Exec(`
 		UPDATE users SET
-			display_name = ?, fitness_level = ?, primary_goal = ?,
+			display_name = ?, gender = ?, height_cm = ?, weight_kg = ?,
+			fitness_level = ?, primary_goal = ?,
 			allergies = ?, dietary_prefs = ?,
 			onboarding_completed = 1,
 			updated_at = datetime('now')
 		WHERE id = ?
-	`, req.DisplayName, req.FitnessLevel, req.PrimaryGoal,
+	`, req.DisplayName, req.Gender, req.HeightCm, req.WeightKg,
+		req.FitnessLevel, req.PrimaryGoal,
 		string(allergiesJSON), string(dietaryJSON),
 		userID)
 
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to complete onboarding")
 		return
+	}
+
+	// ── Assess daily goals from body stats ─────────────────────
+	// When height and weight are provided at registration, compute
+	// personalized calorie / protein / water targets and persist them.
+	if req.HeightCm > 0 && req.WeightKg > 0 {
+		if _, err := applyRecommendedGoals(userID, req.HeightCm, req.WeightKg, req.PrimaryGoal); err != nil {
+			log.Printf("ERROR applying recommended goals (id=%s): %v", userID, err)
+		}
 	}
 
 	user, err := fetchUserByID(userID)
@@ -370,14 +384,14 @@ func fetchUserByID(userID string) (*models.User, error) {
 
 	err := database.DB.QueryRow(`
 		SELECT id, email, display_name, phone_number, date_of_birth,
-		       gender, height_cm, fitness_level, primary_goal,
+		       gender, height_cm, weight_kg, fitness_level, primary_goal,
 		       allergies, dietary_prefs, photo_url,
 		       CASE WHEN onboarding_completed THEN 1 ELSE 0 END,
 		       created_at, updated_at
 		FROM users WHERE id = ?
 	`, userID).Scan(
 		&user.ID, &user.Email, &user.DisplayName, &user.PhoneNumber, &user.DateOfBirth,
-		&user.Gender, &user.HeightCm, &user.FitnessLevel, &user.PrimaryGoal,
+		&user.Gender, &user.HeightCm, &user.WeightKg, &user.FitnessLevel, &user.PrimaryGoal,
 		&allergiesJSON, &dietaryPrefsJSON, &user.PhotoURL,
 		&onboardingInt,
 		&user.CreatedAt, &user.UpdatedAt,

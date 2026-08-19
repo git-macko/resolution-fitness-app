@@ -47,9 +47,22 @@ export default function OnboardingScreen({ navigation }) {
   const [displayName, setDisplayName] = useState('');
   const [fitnessLevel, setFitnessLevel] = useState('');
   const [primaryGoal, setPrimaryGoal] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [weightKg, setWeightKg] = useState('');
+  const [gender, setGender] = useState('');
   const [allergies, setAllergies] = useState([]);
   const [dietaryPrefs, setDietaryPrefs] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const GENDERS = [
+    { key: 'male', label: 'Male' },
+    { key: 'female', label: 'Female' },
+    { key: 'other', label: 'Prefer not to say' },
+  ];
+
+  // Body stats are optional but strongly encouraged — they let us estimate
+  // your daily calorie, protein, and water goals.
+  const hasBodyStats = parseFloat(heightCm) > 0 && parseFloat(weightKg) > 0;
 
   const toggleItem = (list, setList, item) => {
     if (list.includes(item)) {
@@ -71,6 +84,9 @@ export default function OnboardingScreen({ navigation }) {
         displayName: displayName.trim() || 'Athlete',
         fitnessLevel,
         primaryGoal,
+        heightCm: parseFloat(heightCm) || 0,
+        weightKg: parseFloat(weightKg) || 0,
+        gender,
         allergies,
         dietaryPrefs,
       });
@@ -253,8 +269,102 @@ export default function OnboardingScreen({ navigation }) {
     );
   }
 
-  // ── Step 3: Allergies & Diet ──────────────────────────
+  // ── Step 3: Body Stats ────────────────────────────────
+  // Height + weight let the backend estimate daily calorie / protein /
+  // water goals. Gender is optional but rounds out the profile.
   if (step === 3) {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.stepTitle}>Your Body Stats</Text>
+          <Text style={styles.stepSubtitle}>
+            We'll use these to estimate your daily calorie, protein & water goals
+          </Text>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statsField}>
+              <Text style={styles.sectionLabel}>Height (cm)</Text>
+              <TextInput
+                style={[styles.statsInput, { backgroundColor: colors.surfaceMuted, color: colors.textPrimary, borderColor: colors.border }]}
+                value={heightCm}
+                onChangeText={setHeightCm}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 175"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+            <View style={styles.statsField}>
+              <Text style={styles.sectionLabel}>Weight (kg)</Text>
+              <TextInput
+                style={[styles.statsInput, { backgroundColor: colors.surfaceMuted, color: colors.textPrimary, borderColor: colors.border }]}
+                value={weightKg}
+                onChangeText={setWeightKg}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 70"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>Gender (optional)</Text>
+          <View style={styles.chipGrid}>
+            {GENDERS.map((g) => {
+              const selected = gender === g.key;
+              return (
+                <TouchableOpacity
+                  key={g.key}
+                  style={[
+                    styles.chip,
+                    selected && {
+                      backgroundColor: colors.accent,
+                      borderColor: colors.accent,
+                    },
+                  ]}
+                  onPress={() => setGender(selected ? '' : g.key)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selected && {
+                        color: colors.textInverse,
+                        fontWeight: '600',
+                      },
+                    ]}
+                  >
+                    {g.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {!hasBodyStats ? (
+            <Text style={[styles.statsHint, { color: colors.textMuted }]}>
+              You can skip this and update it later from your Account tab.
+            </Text>
+          ) : null}
+
+          <View style={styles.navRow}>
+            <TouchableOpacity
+              style={[styles.secondaryBtn, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}
+              onPress={() => setStep(2)}
+            >
+              <Text style={styles.secondaryBtnText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => setStep(4)}
+            >
+              <Text style={styles.primaryBtnText}>Next</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Step 4: Allergies & Diet ──────────────────────────
+  if (step === 4) {
     return (
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -330,7 +440,7 @@ export default function OnboardingScreen({ navigation }) {
           <View style={styles.navRow}>
             <TouchableOpacity
               style={[styles.secondaryBtn, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}
-              onPress={() => setStep(2)}
+              onPress={() => setStep(3)}
             >
               <Text style={styles.secondaryBtnText}>Back</Text>
             </TouchableOpacity>
@@ -463,6 +573,25 @@ function makeStyles(theme) {
       color: colors.textPrimary,
       marginBottom: Spacing.md,
       marginTop: Spacing.lg,
+    },
+    // ── Body stats (Step 3) ────────────────────────────────
+    statsRow: {
+      flexDirection: 'row',
+      gap: Spacing.md,
+    },
+    statsField: {
+      flex: 1,
+    },
+    statsInput: {
+      ...Typography.body,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      borderWidth: 1,
+    },
+    statsHint: {
+      ...Typography.caption,
+      marginTop: Spacing.sm,
     },
     chipGrid: {
       flexDirection: 'row',

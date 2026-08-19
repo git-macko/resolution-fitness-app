@@ -5,6 +5,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"resolution-fitnessapp-backend/database"
@@ -62,7 +63,9 @@ func GetDailyNutrition(w http.ResponseWriter, r *http.Request) {
 		WaterGoalMl:   waterGoal,
 		CalorieTarget: calorieTarget,
 		ProteinTarget: float64(proteinTarget),
-		Meals:         meals,
+		// No meals and no water logged → the day counts as "no update".
+		HasActivity: len(meals) > 0 || totalWater > 0,
+		Meals:       meals,
 	}
 
 	utils.WriteSuccess(w, summary, "Daily nutrition retrieved")
@@ -533,7 +536,52 @@ func generateMealSuggestions(goal string, allergies, dietaryPrefs []string) []mo
 	if len(filtered) == 0 {
 		filtered = allSuggestions
 	}
+
+	// ── Rank by the user's fitness goal ────────────────────────
+	// The same pool is shared by every user; ordering it by goal makes the
+	// top suggestions feel personalized (e.g. protein-forward for muscle
+	// gain, lighter for weight loss).
+	ranks := make([]int, len(filtered))
+	for i, s := range filtered {
+		ranks[i] = mealGoalRelevance(goal, s)
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return ranks[i] > ranks[j]
+	})
+
 	return filtered
+}
+
+// mealGoalRelevance scores how well a suggestion matches the user's primary
+// fitness goal. Higher = more relevant. Ties keep the original pool order.
+func mealGoalRelevance(goal string, s models.MealSuggestion) int {
+	switch goal {
+	case "build_muscle", "muscle_gain", "strength":
+		// Protein-forward meals rise to the top.
+		switch {
+		case s.ProteinG >= 40:
+			return 3
+		case s.ProteinG >= 25:
+			return 2
+		default:
+			return 1
+		}
+	case "lose_weight", "weight_loss":
+		// Lower-calorie, higher-satiety meals rise to the top.
+		switch {
+		case s.Calories <= 380:
+			return 3
+		case s.Calories <= 520:
+			return 2
+		default:
+			return 1
+		}
+	case "get_toned", "endurance":
+		// Balanced meals are a safe first pick.
+		return 2
+	default:
+		return 1
+	}
 }
 
 // safeDiv handles division by zero for float values.

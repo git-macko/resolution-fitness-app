@@ -113,13 +113,30 @@ class ApiClient {
     }
 
     // ── 15-second timeout to prevent infinite loading ──────────
+    // Longer-lived calls (e.g. AI image generation) can pass options.timeout.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), options.timeout || 15000);
     config.signal = controller.signal;
 
     try {
       const response = await fetch(`${BASE_URL}${endpoint}`, config);
-      const data = await response.json();
+
+      // Handle non-JSON responses (e.g. plain-text 404 from reverse proxy)
+      const contentType = response.headers.get('content-type') || '';
+      let data;
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        // If it looks like JSON, try to parse it
+        const trimmed = text.trim();
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+          try { data = JSON.parse(trimmed); } catch { data = null; }
+        }
+        if (!data) {
+          throw new Error(response.ok ? 'Unexpected response format' : `Request failed (${response.status})`);
+        }
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Something went wrong');
@@ -206,6 +223,18 @@ class ApiClient {
     return this.request('/api/profile/onboarding', {
       method: 'POST',
       body: JSON.stringify(fields),
+    });
+  }
+
+  // Recomputes daily calorie / protein / water targets from body stats.
+  // Pass heightCm / weightKg / primaryGoal to also update the profile.
+  async recalculateGoals(fields) {
+    invalidateCache('/api/profile/settings');
+    invalidateCache('/api/nutrition');
+    invalidateCache('/api/dashboard');
+    return this.request('/api/profile/goals', {
+      method: 'POST',
+      body: JSON.stringify(fields || {}),
     });
   }
 
@@ -296,6 +325,28 @@ class ApiClient {
 
   async getExercise(exerciseId, options) {
     return this.request(`/api/exercises/${exerciseId}`, options);
+  }
+
+  async generateExerciseImage(exerciseId, options) {
+    invalidateCache('/api/exercises');
+    return this.request(`/api/exercises/${exerciseId}/generate-image`, {
+      method: 'POST',
+      timeout: 90000,
+      ...options,
+    });
+  }
+
+  async generateAllExerciseImages(muscleGroup, options) {
+    invalidateCache('/api/exercises');
+    const query = muscleGroup ? `?muscle_group=${encodeURIComponent(muscleGroup)}` : '';
+    return this.request(`/api/exercises/generate-images${query}`, {
+      method: 'POST',
+      ...options,
+    });
+  }
+
+  async getExerciseImageStatus(jobId, options) {
+    return this.request(`/api/exercises/generate-images/status?id=${encodeURIComponent(jobId)}`, options);
   }
 
   // ── Weekly Plans ───────────────────────────────────────────────
@@ -451,6 +502,46 @@ class ApiClient {
     return this.request('/api/nutrition/suggestions', options);
   }
 
+  // ── Build Inspiration ──────────────────────────────────────────
+  // Inspiration data rides along in the GET /api/dashboard payload.
+
+  async uploadInspirationPhoto(imageUri) {
+    invalidateCache('/api/dashboard');
+    invalidateCache('/api/inspiration');
+    const formData = new FormData();
+    const filename = imageUri.split('/').pop();
+    const match = /\.(\w+)$/.exec(filename || '');
+    const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+    formData.append('photo', {
+      uri: imageUri,
+      name: filename || 'photo.jpg',
+      type,
+    });
+
+    return this.request('/api/inspiration/photos', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async deleteInspirationPhoto(photoId) {
+    invalidateCache('/api/dashboard');
+    invalidateCache('/api/inspiration');
+    return this.request(`/api/inspiration/photos/${encodeURIComponent(photoId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async reorderInspirationPhotos(photoIds) {
+    invalidateCache('/api/dashboard');
+    invalidateCache('/api/inspiration');
+    return this.request('/api/inspiration/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ photoIds }),
+    });
+  }
+
   // ── Food Scanner ───────────────────────────────────────────────
 
   async scanFood(imageUri) {
@@ -531,6 +622,12 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(sleep),
     });
+  }
+
+  // ── Progression Badges ───────────────────────────────────────
+
+  async getBadges(options) {
+    return this.request('/api/badges', options);
   }
 
   // ── Quotes & Facts ───────────────────────────────────────────

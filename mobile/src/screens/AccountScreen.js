@@ -2,61 +2,22 @@
 // User profile, stats, settings, and account management.
 // Theme-aware.
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
-  StyleSheet, ActivityIndicator, Alert, Image,
+  StyleSheet, ActivityIndicator, Alert, Image, TextInput,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
 import Card from '../components/Card';
+import HeroCard from '../components/HeroCard';
+import HeroStatRow from '../components/HeroStat';
 import MimiMark from '../components/MimiMark';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Layout } from '../theme/spacing';
-import { heroGradient, heroStart, heroEnd, cardShadows } from '../theme/card';
 import usePressScale from '../utils/usePressScale';
-
-/**
- * AnimatedCounter — counts up from 0 to `value` with a subtle spring-pulse
- * flourish when the count completes. Used inside the gradient profile
- * card to animate stat numbers on mount / value change.
- */
-function AnimatedCounter({ value, style, prefix = '' }) {
-  const [display, setDisplay] = useState(prefix + '0');
-  const animRef = useRef(new Animated.Value(0));
-  const scaleRef = useRef(new Animated.Value(1));
-
-  useEffect(() => {
-    const anim = animRef.current;
-    anim.setValue(0);
-
-    const listener = anim.addListener(({ value: v }) => {
-      setDisplay(prefix + Math.round(v).toString());
-    });
-
-    Animated.timing(anim, {
-      toValue: value,
-      duration: 800,
-      useNativeDriver: false,
-    }).start(() => {
-      Animated.sequence([
-        Animated.spring(scaleRef.current, { toValue: 1.15, useNativeDriver: true }),
-        Animated.spring(scaleRef.current, { toValue: 1, useNativeDriver: true }),
-      ]).start();
-    });
-
-    return () => anim.removeListener(listener);
-  }, [value, prefix]);
-
-  return (
-    <Animated.Text style={[style, { transform: [{ scale: scaleRef.current }] }]}>
-      {display}
-    </Animated.Text>
-  );
-}
 
 export default function AccountScreen({ navigation }) {
   const { user, updateUser, logout } = useAuth();
@@ -64,20 +25,86 @@ export default function AccountScreen({ navigation }) {
   const styles = useThemedStyles(makeStyles);
   const mimiPress = usePressScale(0.92);
   const [settings, setSettings] = useState(null);
+  const [badges, setBadges] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // ── Body stats editing ──────────────────────────────────────
+  const [bodyHeight, setBodyHeight] = useState('');
+  const [bodyWeight, setBodyWeight] = useState('');
+  const [bodyGender, setBodyGender] = useState('');
+  const [savingStats, setSavingStats] = useState(false);
+
   useEffect(() => {
-    fetchSettings();
+    fetchAccountData();
   }, []);
 
-  const fetchSettings = async () => {
+  // Sync the editable fields whenever the stored profile values change.
+  // Depends on the primitive values (not the user object) so typing in the
+  // fields never gets clobbered by an unrelated re-render.
+  useEffect(() => {
+    if (user) {
+      setBodyHeight(user.heightCm > 0 ? String(user.heightCm) : '');
+      setBodyWeight(user.weightKg > 0 ? String(user.weightKg) : '');
+      setBodyGender(user.gender || '');
+    }
+  }, [user?.heightCm, user?.weightKg, user?.gender]);
+
+  const fetchAccountData = async () => {
     try {
       const data = await api.getSettings();
       setSettings(data.data || data || {});
     } catch (err) {
       console.warn('Settings fetch failed:', err.message);
+    }
+    // Progression badges are computed server-side from Fitness + Health activity.
+    try {
+      const data = await api.getBadges();
+      const list = data.data || data || [];
+      setBadges(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.warn('Badges fetch failed:', err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Body stats: save + recompute daily goals ─────────────────
+  // Height and weight feed the calorie / protein / water targets, so
+  // updating them recalculates the goals and stores both on the server.
+  const handleSaveBodyStats = async () => {
+    const height = parseFloat(bodyHeight) || 0;
+    const weight = parseFloat(bodyWeight) || 0;
+
+    if (height <= 0 || weight <= 0) {
+      Alert.alert('Missing info', 'Enter your height and weight to recalculate your goals.');
+      return;
+    }
+
+    setSavingStats(true);
+    try {
+      const data = await api.recalculateGoals({
+        heightCm: height,
+        weightKg: weight,
+        gender: bodyGender,
+        primaryGoal: user?.primaryGoal || 'general',
+      });
+      const goals = data.data || data || {};
+
+      if (user) {
+        updateUser({ ...user, heightCm: height, weightKg: weight, gender: bodyGender });
+      }
+      setSettings((prev) => ({ ...(prev || {}), ...goals }));
+
+      Alert.alert(
+        'Goals updated 🎯',
+        `Your daily targets are now ${goals.calorieTarget || 0} kcal, ` +
+          `${goals.proteinTargetGrams || 0} g protein, and ` +
+          `${goals.waterGoalMl || 0} ml water. Fine-tune them anytime in Settings.`
+      );
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Could not update body stats.');
+    } finally {
+      setSavingStats(false);
     }
   };
 
@@ -111,21 +138,7 @@ export default function AccountScreen({ navigation }) {
     ]);
   };
 
-  // ── Stats row entrance animation (fade + slide up) ──────
-  const statsRowOpacity = useRef(new Animated.Value(0)).current;
-  const statsRowTranslateY = useRef(new Animated.Value(20)).current;
 
-  useEffect(() => {
-    if (!loading) {
-      const delay = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(statsRowOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-          Animated.timing(statsRowTranslateY, { toValue: 0, duration: 500, useNativeDriver: true }),
-        ]).start();
-      }, 600);
-      return () => clearTimeout(delay);
-    }
-  }, [loading]);
 
   if (loading) {
     return (
@@ -140,7 +153,10 @@ export default function AccountScreen({ navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.headerTitle, { color: colors.textHeading }]}>Account</Text>
+        <View>
+          <Text style={[styles.headerTitle, { color: colors.textHeading }]}>Account</Text>
+          <Text style={[styles.headerSub, { color: colors.textSecondary }]}>Profile & Settings</Text>
+        </View>
         <Pressable
           onPress={() => navigation.navigate('Chat')}
           {...mimiPress.handlers}
@@ -154,47 +170,107 @@ export default function AccountScreen({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* ── Profile Card (Gradient) ─────────────────────────── */}
-        <View style={[styles.gradientProfileOuter, cardShadows.strong]}>
-          <LinearGradient
-            colors={[heroGradient.start, heroGradient.end]}
-            locations={[heroGradient.startLocation, heroGradient.endLocation]}
-            start={heroStart}
-            end={heroEnd}
-            style={styles.gradientProfileInner}
-          >
-            <TouchableOpacity onPress={handlePickPhoto}>
-              <View style={[styles.avatar, { backgroundColor: colors.accentBg }]}>
-                {user?.photoUrl ? (
-                  <Image source={{ uri: user.photoUrl }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={[styles.avatarPlaceholder, { color: colors.accent }]}>
-                    {(user?.displayName || 'A')[0].toUpperCase()}
+        {/* ── Profile Card (Hero Gradient) ────────────────────── */}
+        <HeroCard
+          topLabel="PROFILE"
+          title={user?.displayName || 'Athlete'}
+          subtitle={user?.email || ''}
+        >
+          {/* Avatar + Change Photo */}
+          <TouchableOpacity onPress={handlePickPhoto} style={styles.heroAvatarWrap}>
+            <View style={[styles.heroAvatar, { backgroundColor: colors.heroAvatarBg }]}>
+              {user?.photoUrl ? (
+                <Image source={{ uri: user.photoUrl }} style={styles.heroAvatarImage} />
+              ) : (
+                <Text style={styles.heroAvatarPlaceholder}>
+                  {(user?.displayName || 'A')[0].toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <Text style={styles.heroChangePhoto}>Change photo</Text>
+          </TouchableOpacity>
+          <HeroStatRow
+            stats={[
+              { value: stats.totalWorkouts || 0, label: 'Workouts', tone: 'default' },
+              { value: stats.currentStreak || 0, label: 'Day Streak', tone: 'primary' },
+              { value: `Lv.${stats.fitnessLevel || 1}`, label: 'Level', tone: 'warning' },
+            ]}
+          />
+        </HeroCard>
+
+        {/* ── Progression Badges ───────────────────────────────── */}
+        <Card style={styles.marginBottom} contentStyle={styles.badgesCard}>
+          <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>
+            Progression Badges
+          </Text>
+          <Text style={[styles.badgesIntro, { color: colors.textMuted }]}>
+            Earned from your workouts and nutrition tracking.
+          </Text>
+          {badges.length === 0 ? (
+            <Text style={[styles.badgesEmpty, { color: colors.textSecondary }]}>
+              Keep training and tracking meals to start earning badges 🏅
+            </Text>
+          ) : (
+            badges.map((b, idx) => (
+              <View
+                key={b.id || idx}
+                style={[
+                  styles.badgeRow,
+                  idx < badges.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.divider },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.badgeEmojiWrap,
+                    { backgroundColor: b.earned ? colors.accentBg : colors.surfaceMuted },
+                  ]}
+                >
+                  <Text style={styles.badgeEmoji}>{b.emoji || '🎖️'}</Text>
+                </View>
+                <View style={styles.badgeInfo}>
+                  <View style={styles.badgeNameRow}>
+                    <Text
+                      style={[
+                        styles.badgeName,
+                        { color: b.earned ? colors.accent : colors.textSecondary },
+                      ]}
+                    >
+                      {b.name}
+                    </Text>
+                    {b.earned ? (
+                      <Text style={[styles.badgeEarnedTag, { color: colors.success }]}>
+                        ✓ Earned
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.badgeDesc, { color: colors.textMuted }]}>
+                    {b.description}
                   </Text>
-                )}
+                  {!b.earned ? (
+                    <>
+                      <View style={[styles.badgeProgressBg, { backgroundColor: colors.divider }]}>
+                        <View
+                          style={[
+                            styles.badgeProgressFill,
+                            {
+                              backgroundColor: colors.accent,
+                              width: `${Math.round((b.progress || 0) * 100)}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                      {b.progressText ? (
+                        <Text style={[styles.badgeProgressText, { color: colors.textMuted }]}>
+                          {b.progressText}
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </View>
               </View>
-              <Text style={styles.changePhotoHint}>Change photo</Text>
-            </TouchableOpacity>
-            <Text style={styles.displayName}>{user?.displayName || 'Athlete'}</Text>
-            <Text style={styles.email}>{user?.email || ''}</Text>
-            <Animated.View style={[styles.profileStatsRow, { opacity: statsRowOpacity, transform: [{ translateY: statsRowTranslateY }] }]}>
-              <View style={styles.profileStatItem}>
-                <AnimatedCounter value={stats.totalWorkouts || 0} style={styles.profileStatValue} />
-                <Text style={styles.profileStatLabel}>Workouts</Text>
-              </View>
-              <View style={styles.profileStatDivider} />
-              <View style={styles.profileStatItem}>
-                <AnimatedCounter value={stats.currentStreak || 0} style={styles.profileStatValue} />
-                <Text style={styles.profileStatLabel}>Day Streak</Text>
-              </View>
-              <View style={styles.profileStatDivider} />
-              <View style={styles.profileStatItem}>
-                <AnimatedCounter value={stats.fitnessLevel || 1} style={styles.profileStatValue} prefix="Lv." />
-                <Text style={styles.profileStatLabel}>Level</Text>
-              </View>
-            </Animated.View>
-          </LinearGradient>
-        </View>
+            ))
+          )}
+        </Card>
 
         {/* ── Profile Info ─────────────────────────────────────── */}
         <Card style={styles.marginBottom} contentStyle={styles.infoCard}>
@@ -224,6 +300,111 @@ export default function AccountScreen({ navigation }) {
               <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user.heightCm} cm</Text>
             </View>
           )}
+          {user?.weightKg > 0 && (
+            <View style={[styles.infoRow, { borderBottomColor: colors.divider }]}>
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Weight</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{user.weightKg} kg</Text>
+            </View>
+          )}
+        </Card>
+
+        {/* ── Body Stats & Goals ───────────────────────────────── */}
+        <Card style={styles.marginBottom} contentStyle={styles.infoCard}>
+          <Text style={[styles.sectionTitle, { color: colors.textHeading }]}>
+            Body Stats & Daily Goals
+          </Text>
+          <Text style={[styles.statsIntro, { color: colors.textMuted }]}>
+            Your height and weight are used to estimate your calorie, protein, and water goals.
+          </Text>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statsField}>
+              <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Height (cm)</Text>
+              <TextInput
+                style={[styles.statsInput, { backgroundColor: colors.accentWash, color: colors.textPrimary, borderColor: colors.accent }]}
+                value={bodyHeight}
+                onChangeText={setBodyHeight}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 175"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+            <View style={styles.statsField}>
+              <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Weight (kg)</Text>
+              <TextInput
+                style={[styles.statsInput, { backgroundColor: colors.accentWash, color: colors.textPrimary, borderColor: colors.accent }]}
+                value={bodyWeight}
+                onChangeText={setBodyWeight}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 70"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+          </View>
+
+          <Text style={[styles.statsLabel, { color: colors.textSecondary, marginTop: Spacing.md }]}>
+            Gender (optional)
+          </Text>
+          <View style={styles.genderRow}>
+            {[{ key: 'male', label: 'Male' }, { key: 'female', label: 'Female' }, { key: 'other', label: 'Prefer not to say' }].map((g) => {
+              const selected = bodyGender === g.key;
+              return (
+                <TouchableOpacity
+                  key={g.key}
+                  style={[
+                    styles.genderChip,
+                    {
+                      backgroundColor: selected ? colors.accent : colors.surfaceMuted,
+                      borderColor: selected ? colors.accent : colors.border,
+                    },
+                  ]}
+                  onPress={() => setBodyGender(selected ? '' : g.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.genderChipText,
+                      { color: selected ? colors.textInverse : colors.textSecondary },
+                    ]}
+                  >
+                    {g.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={[styles.targetsRow, { backgroundColor: colors.surfaceMuted }]}>
+            <View style={styles.targetItem}>
+              <Text style={[styles.targetValue, { color: colors.accent }]}>{settings?.calorieTarget || 2000}</Text>
+              <Text style={[styles.targetLabel, { color: colors.textMuted }]}>kcal</Text>
+            </View>
+            <View style={[styles.targetDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.targetItem}>
+              <Text style={[styles.targetValue, { color: colors.info }]}>{settings?.proteinTargetGrams || 150}g</Text>
+              <Text style={[styles.targetLabel, { color: colors.textMuted }]}>protein</Text>
+            </View>
+            <View style={[styles.targetDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.targetItem}>
+              <Text style={[styles.targetValue, { color: colors.info }]}>{settings?.waterGoalMl || 2000}ml</Text>
+              <Text style={[styles.targetLabel, { color: colors.textMuted }]}>water</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.statsSaveBtn, { backgroundColor: colors.accent }]}
+            onPress={handleSaveBodyStats}
+            disabled={savingStats}
+            activeOpacity={0.8}
+          >
+            {savingStats ? (
+              <ActivityIndicator color={colors.textInverse} />
+            ) : (
+              <Text style={[styles.statsSaveText, { color: colors.textInverse }]}>
+                Update & Recalculate Goals
+              </Text>
+            )}
+          </TouchableOpacity>
         </Card>
 
         {/* ── Allergies & Diet ─────────────────────────────────── */}
@@ -273,6 +454,22 @@ export default function AccountScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={{ height: Spacing['4xl'] }} />
+
+        {/* ── THEME COLOR REFERENCE (uncomment to preview) ───── */}
+        {/*
+        <Card style={styles.marginBottom} contentStyle={{ padding: Spacing.lg }}>
+          <Text style={[styles.sectionTitle, { color: colors.textHeading, marginTop: 0 }]}>
+            🎨 Theme Colors
+          </Text>
+          {Object.entries(colors).map(([key, value]) => (
+            <View key={key} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+              <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: value, borderWidth: 1, borderColor: colors.border, marginRight: 10 }} />
+              <Text style={{ ...Typography.bodySmall, color: colors.textPrimary, flex: 1 }}>{key}</Text>
+              <Text style={{ ...Typography.caption, color: colors.textMuted }}>{value}</Text>
+            </View>
+          ))}
+        </Card>
+        */}
       </ScrollView>
     </View>
   );
@@ -306,46 +503,26 @@ function makeStyles(theme) {
       fontWeight: '600',
     },
     scrollContent: { padding: Spacing.xl },
-    sectionTitle: { ...Typography.bodyMedium, marginBottom: Spacing.md },
+    headerSub: { ...Typography.bodySmall, marginTop: Spacing.xs },
+    sectionTitle: { ...Typography.bodyMedium, marginBottom: Spacing.md, marginTop: Spacing.lg },
     marginBottom: { marginBottom: Spacing.lg },
     marginBottomMd: { marginBottom: Spacing.md },
-    // ── Gradient Profile Card ────────────────────────────────
-    gradientProfileOuter: {
-      borderRadius: BorderRadius.lg,
-      backgroundColor: heroGradient.start,
+    // ── Hero Avatar (inside gradient HeroCard) ──────────────
+    heroAvatarWrap: {
+      alignItems: 'center',
       marginBottom: Spacing.lg,
     },
-    gradientProfileInner: {
-      borderRadius: BorderRadius.lg,
-      padding: Spacing['2xl'],
-      alignItems: 'center',
-    },
-    avatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
+    heroAvatar: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
       justifyContent: 'center',
       alignItems: 'center',
       overflow: 'hidden',
     },
-    avatarImage: { width: 80, height: 80, borderRadius: 40 },
-    avatarPlaceholder: { ...Typography.h2 },
-    changePhotoHint: { ...Typography.caption, color: 'rgba(255, 255, 255, 0.75)', marginTop: Spacing.sm },
-    displayName: { ...Typography.h3, color: '#FFFFFF', marginTop: Spacing.lg },
-    email: { ...Typography.bodySmall, color: 'rgba(255, 255, 255, 0.75)', marginTop: 2 },
-    // ── Profile Stats Row (inside gradient card) ────────────
-    profileStatsRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: Spacing.xl,
-      paddingTop: Spacing.lg,
-      borderTopWidth: 1,
-      borderTopColor: 'rgba(255, 255, 255, 0.2)',
-    },
-    profileStatItem: { flex: 1, alignItems: 'center' },
-    profileStatValue: { ...Typography.statSmall, color: '#FFFFFF' },
-    profileStatLabel: { ...Typography.caption, color: 'rgba(255, 255, 255, 0.65)', marginTop: 2 },
-    profileStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255, 255, 255, 0.2)' },
+    heroAvatarImage: { width: 72, height: 72, borderRadius: 36 },
+    heroAvatarPlaceholder: { ...Typography.h2, color: colors.heroText },
+    heroChangePhoto: { ...Typography.caption, color: colors.heroTextMuted, marginTop: Spacing.sm },
     // ── Info Card ─────────────────────────────────────────────
     infoCard: {
       padding: Spacing.lg,
@@ -358,6 +535,142 @@ function makeStyles(theme) {
     },
     infoLabel: { ...Typography.bodySmall },
     infoValue: { ...Typography.bodyMedium },
+    // ── Body Stats & Daily Goals ──────────────────────────────
+    statsIntro: {
+      ...Typography.caption,
+      marginTop: -Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: Spacing.md,
+    },
+    statsField: {
+      flex: 1,
+    },
+    statsLabel: {
+      ...Typography.caption,
+      marginBottom: Spacing.xs,
+    },
+    statsInput: {
+      ...Typography.body,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderWidth: 1,
+    },
+    genderRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+    },
+    genderChip: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+    },
+    genderChipText: {
+      ...Typography.caption,
+      fontWeight: '600',
+    },
+    targetsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: BorderRadius.md,
+      paddingVertical: Spacing.md,
+      marginTop: Spacing.lg,
+    },
+    targetItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    targetValue: {
+      ...Typography.bodyMedium,
+      fontWeight: '700',
+    },
+    targetLabel: {
+      ...Typography.caption,
+      marginTop: 2,
+    },
+    targetDivider: {
+      width: 1,
+      height: 24,
+    },
+    statsSaveBtn: {
+      borderRadius: BorderRadius.md,
+      paddingVertical: Spacing.md,
+      alignItems: 'center',
+      marginTop: Spacing.lg,
+    },
+    statsSaveText: {
+      ...Typography.bodyMedium,
+      fontWeight: '700',
+    },
+    // ── Progression Badges ────────────────────────────────────
+    badgesCard: {
+      padding: Spacing.lg,
+    },
+    badgesIntro: {
+      ...Typography.caption,
+      marginTop: -Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    badgesEmpty: {
+      ...Typography.bodySmall,
+      paddingVertical: Spacing.md,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      paddingVertical: Spacing.md,
+    },
+    badgeEmojiWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: Spacing.md,
+    },
+    badgeEmoji: {
+      fontSize: 22,
+    },
+    badgeInfo: {
+      flex: 1,
+    },
+    badgeNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    badgeName: {
+      ...Typography.bodyMedium,
+      fontWeight: '700',
+    },
+    badgeEarnedTag: {
+      ...Typography.captionMedium,
+      fontWeight: '700',
+    },
+    badgeDesc: {
+      ...Typography.caption,
+      marginTop: 2,
+      lineHeight: 17,
+    },
+    badgeProgressBg: {
+      height: 6,
+      borderRadius: 3,
+      overflow: 'hidden',
+      marginTop: Spacing.sm,
+    },
+    badgeProgressFill: {
+      height: 6,
+      borderRadius: 3,
+    },
+    badgeProgressText: {
+      ...Typography.caption,
+      marginTop: Spacing.xs,
+    },
     // ── Tags ──────────────────────────────────────────────────
     tagRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: Spacing.md },
     tagLabel: { ...Typography.caption, marginRight: Spacing.sm, marginTop: 3 },

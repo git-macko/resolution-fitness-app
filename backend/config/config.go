@@ -6,6 +6,7 @@ package config
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
@@ -30,7 +31,7 @@ type Config struct {
 	GeminiKey string
 
 	// GeminiModel is the Gemini model name used for AI Coach chat and food photo analysis.
-	// The project is locked to gemini-3.5-flash; no other AI provider or model is used.
+	// The project is locked to gemini-3.5-flash.
 	GeminiModel string
 
 	// BestTimeAPIKey is the private API key for BestTime.app, used to fetch
@@ -76,11 +77,13 @@ func Load() *Config {
 	}
 
 	// ── Database Path ────────────────────────────────────────────────
-	// Default: "./database.db" — a file in the backend directory.
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./database.db"
-	}
+	// Default: the database.db file next to the running executable when
+	// one exists (covers launching the built binary from any directory),
+	// otherwise "./database.db" in the current working directory.
+	// This keeps `cd backend && go run .` working while making a wrong-cwd
+	// launch open the real backend database instead of silently creating
+	// a fresh one next to the binary.
+	dbPath := resolveDBPath(os.Getenv("DB_PATH"), "")
 
 	// ── Gemini API Key ──────────────────────────────────────────────
 	// Optional at the server level. Provides a generous free tier for
@@ -129,4 +132,38 @@ func Load() *Config {
 		GooglePlacesAPIKey: googlePlacesAPIKey,
 		OverpassAPIURL:     overpassAPIURL,
 	}
+}
+
+// resolveDBPath picks the database file to open.
+//   - envPath is the explicit DB_PATH override (empty when unset).
+//   - exePath is the path to the running executable; when empty it is
+//     discovered automatically. It is a parameter purely for testing.
+//
+// Resolution order:
+//   1. envPath (if set)
+//   2. database.db next to the executable (if that file exists)
+//   3. ./database.db in the current working directory
+// The result is returned as an absolute path so startup logs are unambiguous.
+func resolveDBPath(envPath, exePath string) string {
+	dbPath := envPath
+	if dbPath == "" {
+		dbPath = "./database.db"
+		if exePath == "" {
+			if p, err := os.Executable(); err == nil {
+				exePath = p
+			}
+		}
+		if exePath != "" {
+			if exeDir, err := filepath.Abs(filepath.Dir(exePath)); err == nil {
+				candidate := filepath.Join(exeDir, "database.db")
+				if _, statErr := os.Stat(candidate); statErr == nil {
+					dbPath = candidate
+				}
+			}
+		}
+	}
+	if absPath, err := filepath.Abs(dbPath); err == nil {
+		dbPath = absPath
+	}
+	return dbPath
 }

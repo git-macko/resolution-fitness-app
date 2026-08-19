@@ -27,6 +27,10 @@ func main() {
 	log.Printf("Configuration loaded (port: %s)", cfg.Port)
 
 	// ── Step 2: Initialize database with migrations ───────────────
+	// Log the resolved DB path first so a launch from the wrong working
+	// directory is immediately visible instead of silently creating a
+	// fresh database somewhere unexpected.
+	log.Printf("Database path: %s", cfg.DBPath)
 	if err := database.Initialize(cfg.DBPath); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -69,6 +73,7 @@ func main() {
 	mux.Handle("POST /api/profile/gym/refresh-hours", protect(handlers.RefreshGymHours))
 	mux.Handle("DELETE /api/profile", protect(handlers.DeleteAccount))
 	mux.Handle("POST /api/profile/onboarding", protect(handlers.CompleteOnboarding))
+	mux.Handle("POST /api/profile/goals", protect(handlers.RecalculateGoals))
 
 	// --- Gym crowd (protected) ---
 	mux.Handle("GET /api/gym-crowd", protect(handlers.GetGymCrowd))
@@ -79,6 +84,9 @@ func main() {
 	// --- Exercise Library routes ---
 	mux.HandleFunc("GET /api/exercises", handlers.GetExercises)
 	mux.HandleFunc("GET /api/exercises/{exerciseId}", handlers.GetExercise)
+	mux.Handle("POST /api/exercises/{exerciseId}/generate-image", protect(handlers.GenerateExerciseImage))
+	mux.Handle("POST /api/exercises/generate-images", protect(handlers.GenerateAllExerciseImages))
+	mux.Handle("GET /api/exercises/generate-images/status", protect(handlers.GetExerciseImageStatus))
 
 	// --- Weekly Plans routes (protected) ---
 	mux.Handle("GET /api/plans", protect(handlers.GetPlans))
@@ -129,6 +137,15 @@ func main() {
 
 	// --- Dashboard route (protected) ---
 	mux.Handle("GET /api/dashboard", protect(handlers.GetDashboard))
+
+	// --- Build Inspiration routes (protected) ---
+	mux.Handle("GET /api/inspiration", protect(handlers.GetInspiration))
+	mux.Handle("POST /api/inspiration/photos", protect(handlers.UploadInspirationPhoto))
+	mux.Handle("DELETE /api/inspiration/photos/{photoId}", protect(handlers.DeleteInspirationPhoto))
+	mux.Handle("PUT /api/inspiration/reorder", protect(handlers.ReorderInspirationPhotos))
+
+	// --- Progression Badges (protected) ---
+	mux.Handle("GET /api/badges", protect(handlers.GetBadges))
 
 	// --- Quotes & Facts (protected) ---
 	mux.Handle("GET /api/quotes", protect(handlers.GetRandomQuote))

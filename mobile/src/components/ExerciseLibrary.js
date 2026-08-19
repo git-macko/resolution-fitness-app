@@ -50,28 +50,34 @@ const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
 
 /**
  * Accent tints for the muscle-group color bar at the top of each
- * card. Maps group name → background color.
+ * card. Maps group name → theme color key.
+ * Resolved at render time so editing themes.js changes them app-wide.
  */
-const MUSCLE_COLORS = {
-  chest:    '#EF4444',
-  back:     '#3B82F6',
-  legs:     '#22C55E',
-  shoulders:'#F59E0B',
-  arms:     '#8B5CF6',
-  core:     '#14B8A6',
-  cardio:   '#EC4899',
-};
+const MUSCLE_COLOR_KEYS = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core', 'cardio'];
 
-/** Low-opacity wash backgrounds for the muscle-group pills / placeholders. */
-const MUSCLE_WASHES = {
-  chest:    '#FEF2F2', // red-50
-  back:     '#EFF6FF', // blue-50
-  legs:     '#F0FDF4', // green-50
-  shoulders:'#FFFBEB', // amber-50
-  arms:     '#F5F3FF', // violet-50
-  core:     '#F0FDFA', // teal-50
-  cardio:   '#FDF2F8', // pink-50
-};
+function getMuscleColors(colors) {
+  return {
+    chest:     colors.muscleChest,
+    back:      colors.muscleBack,
+    legs:      colors.muscleLegs,
+    shoulders: colors.muscleShoulders,
+    arms:      colors.muscleArms,
+    core:      colors.muscleCore,
+    cardio:    colors.muscleCardio,
+  };
+}
+
+function getMuscleWashes(colors) {
+  return {
+    chest:     colors.muscleChestWash,
+    back:      colors.muscleBackWash,
+    legs:      colors.muscleLegsWash,
+    shoulders: colors.muscleShouldersWash,
+    arms:      colors.muscleArmsWash,
+    core:      colors.muscleCoreWash,
+    cardio:    colors.muscleCardioWash,
+  };
+}
 
 /** Emoji icons used as exercise image placeholders per muscle group. */
 const MUSCLE_ICONS = {
@@ -137,7 +143,9 @@ export default function ExerciseLibrary({
     return list.slice(0, limit);
   }, [exercises, selectedGroup, limit]);
 
-  // Fallback accent/wash for unknown muscle groups
+  // Resolve muscle-group colors from theme so they're editable in themes.js
+  const MUSCLE_COLORS = useMemo(() => getMuscleColors(colors), [colors]);
+  const MUSCLE_WASHES = useMemo(() => getMuscleWashes(colors), [colors]);
   const allAccent = colors.accent;
   const allWash = colors.accentBg;
 

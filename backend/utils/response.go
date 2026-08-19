@@ -38,6 +38,15 @@ func WriteCreated(w http.ResponseWriter, data interface{}, message string) {
 	})
 }
 
+// WriteAccepted sends a 202 Accepted response with data wrapped in APIResponse.
+// Used for async operations that have been accepted for processing.
+func WriteAccepted(w http.ResponseWriter, data interface{}, message string) {
+	WriteJSON(w, http.StatusAccepted, models.APIResponse{
+		Data:    data,
+		Message: message,
+	})
+}
+
 // WritePaginated sends a 200 OK response with paginated data.
 func WritePaginated(w http.ResponseWriter, data interface{}, page, limit, total int) {
 	hasMore := (page * limit) < total

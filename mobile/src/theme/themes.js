@@ -32,7 +32,7 @@ export const lightTheme = {
     /** Primary accent — orange (buttons, links, badges). */
     accent: '#EA580C',
     accentSoft: '#552f03',
-    accentBg: '#FFEDD5',
+    accentBg: '#e6e0da',
     accentDeep: '#C2410C',
 
     // ── Text ─────────────────────────────────────────────
@@ -68,7 +68,61 @@ export const lightTheme = {
     scrim: 'rgba(0, 0, 0, 0.55)',
     shadow: 'rgba(0, 0, 0, 0.08)',
     /** Soft on-accent tint used for the food-scan / chip backgrounds. */
-    accentWash: '#FEF3E7',
+    accentWash: '#fff4e7',
+
+    // ── Hero card text (white-on-gradient) ─────────────
+    heroText: '#FFFFFF',
+    heroTextSubtle: 'rgba(255, 255, 255, 0.85)',
+    heroTextMuted: 'rgba(255, 255, 255, 0.7)',
+    heroTextFaint: 'rgba(255, 255, 255, 0.35)',
+    heroStatBg: 'rgba(255, 255, 255, 0.12)',
+    heroStatDivider: 'rgba(255, 255, 255, 0.22)',
+
+    // ── Hero stat tones (on gradient) ──────────────────
+    heroStatPrimary: '#FCD34D',
+    heroStatPrimaryLabel: 'rgba(252, 211, 77, 0.92)',
+    heroStatInfo: '#7DD3FC',
+    heroStatInfoLabel: 'rgba(125, 211, 252, 0.92)',
+    heroStatWarning: '#FBBF24',
+    heroStatWarningLabel: 'rgba(251, 191, 36, 0.92)',
+    heroStatError: '#FCA5A5',
+    heroStatErrorLabel: 'rgba(252, 165, 165, 0.92)',
+
+    // ── Muscle group accents ───────────────────────────
+    muscleChest: '#EF4444',
+    muscleBack: '#3B82F6',
+    muscleLegs: '#22C55E',
+    muscleShoulders: '#F59E0B',
+    muscleArms: '#8B5CF6',
+    muscleCore: '#14B8A6',
+    muscleCardio: '#EC4899',
+    muscleChestWash: '#FEF2F2',
+    muscleBackWash: '#EFF6FF',
+    muscleLegsWash: '#F0FDF4',
+    muscleShouldersWash: '#FFFBEB',
+    muscleArmsWash: '#F5F3FF',
+    muscleCoreWash: '#F0FDFA',
+    muscleCardioWash: '#FDF2F8',
+
+    // ── Fitness badge accents ──────────────────────────
+    badgeActivateBg: '#FFF8E1',
+    badgeActivate: '#F57F17',
+    badgeBulkingBg: '#E3F2FD',
+    badgeBulking: '#1565C0',
+    badgeLeaningBg: '#FFF3E0',
+    badgeLeaning: '#E65100',
+    badgeRoutineBg: '#E8F5E9',
+    badgeRoutine: '#2E7D32',
+    badgeActiveBg: '#E3F2FD',
+    badgeActive: '#1565C0',
+    badgeActiveBorder: '#1565C0',
+
+    // ── Quick action accents ───────────────────────────
+    quickActionPlan: '#EF4444',
+    quickActionMeal: '#22C55E',
+    quickActionScan: '#3B82F6',
+    quickActionWater: '#14B8A6',
+    quickActionSettings: '#8B5CF6',
   },
 };
 
@@ -124,6 +178,61 @@ export const darkTheme = {
     scrim: 'rgba(0, 0, 0, 0.6)',
     shadow: 'rgba(0, 0, 0, 0.45)',
     accentWash: '#3F1E0C',
+
+    // ── Hero card text (white-on-gradient) ─────────────
+    heroText: '#FFFFFF',
+    heroTextSubtle: 'rgba(255, 255, 255, 0.85)',
+    heroTextMuted: 'rgba(255, 255, 255, 0.7)',
+    heroTextFaint: 'rgba(255, 255, 255, 0.35)',
+    heroAvatarBg: 'rgba(255, 255, 255, 0.2)',
+    heroStatBg: 'rgba(255, 255, 255, 0.12)',
+    heroStatDivider: 'rgba(255, 255, 255, 0.22)',
+
+    // ── Hero stat tones (on gradient) ──────────────────
+    heroStatPrimary: '#FCD34D',
+    heroStatPrimaryLabel: 'rgba(252, 211, 77, 0.92)',
+    heroStatInfo: '#7DD3FC',
+    heroStatInfoLabel: 'rgba(125, 211, 252, 0.92)',
+    heroStatWarning: '#FBBF24',
+    heroStatWarningLabel: 'rgba(251, 191, 36, 0.92)',
+    heroStatError: '#FCA5A5',
+    heroStatErrorLabel: 'rgba(252, 165, 165, 0.92)',
+
+    // ── Muscle group accents ───────────────────────────
+    muscleChest: '#EF4444',
+    muscleBack: '#3B82F6',
+    muscleLegs: '#22C55E',
+    muscleShoulders: '#F59E0B',
+    muscleArms: '#8B5CF6',
+    muscleCore: '#14B8A6',
+    muscleCardio: '#EC4899',
+    muscleChestWash: '#FEF2F2',
+    muscleBackWash: '#EFF6FF',
+    muscleLegsWash: '#F0FDF4',
+    muscleShouldersWash: '#FFFBEB',
+    muscleArmsWash: '#F5F3FF',
+    muscleCoreWash: '#F0FDFA',
+    muscleCardioWash: '#FDF2F8',
+
+    // ── Fitness badge accents ──────────────────────────
+    badgeActivateBg: '#FFF8E1',
+    badgeActivate: '#F57F17',
+    badgeBulkingBg: '#E3F2FD',
+    badgeBulking: '#1565C0',
+    badgeLeaningBg: '#FFF3E0',
+    badgeLeaning: '#E65100',
+    badgeRoutineBg: '#E8F5E9',
+    badgeRoutine: '#2E7D32',
+    badgeActiveBg: '#E3F2FD',
+    badgeActive: '#1565C0',
+    badgeActiveBorder: '#1565C0',
+
+    // ── Quick action accents ───────────────────────────
+    quickActionPlan: '#EF4444',
+    quickActionMeal: '#22C55E',
+    quickActionScan: '#3B82F6',
+    quickActionWater: '#14B8A6',
+    quickActionSettings: '#8B5CF6',
   },
 };
 

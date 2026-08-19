@@ -12,6 +12,7 @@ type User struct {
 	DateOfBirth         string   `json:"dateOfBirth,omitempty"`
 	Gender              string   `json:"gender,omitempty"`
 	HeightCm            float64  `json:"heightCm,omitempty"`
+	WeightKg            float64  `json:"weightKg,omitempty"`
 	FitnessLevel        string   `json:"fitnessLevel"`
 	PrimaryGoal         string   `json:"primaryGoal"`
 	Allergies           []string `json:"allergies"`
@@ -106,10 +107,19 @@ type UpdateProfileRequest struct {
 	DateOfBirth  string   `json:"dateOfBirth,omitempty"`
 	Gender       string   `json:"gender,omitempty"`
 	HeightCm     float64  `json:"heightCm,omitempty"`
+	WeightKg     float64  `json:"weightKg,omitempty"`
 	FitnessLevel string   `json:"fitnessLevel,omitempty"`
 	PrimaryGoal  string   `json:"primaryGoal,omitempty"`
 	Allergies    []string `json:"allergies,omitempty"`
 	DietaryPrefs []string `json:"dietaryPrefs,omitempty"`
+}
+
+// RecommendedGoals is the computed daily target set returned by
+// POST /api/profile/goals and used to seed user_settings.
+type RecommendedGoals struct {
+	CalorieTarget      int `json:"calorieTarget"`
+	ProteinTargetGrams int `json:"proteinTargetGrams"`
+	WaterGoalMl        int `json:"waterGoalMl"`
 }
 
 // UpdateSettingsRequest is the JSON body for PUT /api/profile/settings.

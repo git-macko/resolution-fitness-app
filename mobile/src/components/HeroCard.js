@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { heroGradient, heroStart, heroEnd, cardShadows } from '../theme/card';
 import { Spacing, BorderRadius } from '../theme/spacing';
 import Typography from '../theme/typography';
+import { useTheme } from '../contexts/ThemeContext';
 
 /**
  * HeroCard — the brand gradient block at the top of a tab.
@@ -47,6 +48,8 @@ export default function HeroCard({
   edgeToEdge = false,
   bleedPadding = Spacing.xl,
 }) {
+  const { colors } = useTheme();
+
   // Hero card gets the heavier 'strong' modern shadow since it's
   // the focal point of every tab. When edgeToEdge is set, the card
   // bleeds to the screen edges and we skip the shadow (a full-bleed
@@ -74,23 +77,23 @@ export default function HeroCard({
         style={edgeToEdge ? styles.gradient : [styles.gradient, { borderRadius: BorderRadius.lg }]}
       >
         <View style={edgeToEdge ? styles.contentFullBleed : styles.content}>
-          {topLabel ? <Text style={styles.topLabel}>{topLabel}</Text> : null}
+          {topLabel ? <Text style={[styles.topLabel, { color: colors.heroTextSubtle }]}>{topLabel}</Text> : null}
 
           {quote ? (
             <View style={styles.quoteBlock}>
-              <Text style={styles.quoteMark}>"</Text>
-              <Text style={styles.quote}>{quote}</Text>
+              <Text style={[styles.quoteMark, { color: colors.heroTextFaint }]}>"</Text>
+              <Text style={[styles.quote, { color: colors.heroText }]}>{quote}</Text>
               {quoteAuthor ? (
-                <Text style={styles.quoteAuthor}>— {quoteAuthor}</Text>
+                <Text style={[styles.quoteAuthor, { color: colors.heroTextMuted }]}>— {quoteAuthor}</Text>
               ) : null}
             </View>
           ) : null}
 
           {title ? (
-            <Text style={[styles.title, !quote && styles.titleNoQuote]}>{title}</Text>
+            <Text style={[styles.title, { color: colors.heroText }, !quote && styles.titleNoQuote]}>{title}</Text>
           ) : null}
 
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          {subtitle ? <Text style={[styles.subtitle, { color: colors.heroTextSubtle }]}>{subtitle}</Text> : null}
 
           {children ? (
             <View style={[styles.body, contentStyle]}>{children}</View>
@@ -120,7 +123,6 @@ const styles = StyleSheet.create({
   },
   topLabel: {
     ...Typography.label,
-    color: 'rgba(255, 255, 255, 0.85)',
     letterSpacing: 1.2,
     marginBottom: Spacing.sm,
   },
@@ -132,24 +134,20 @@ const styles = StyleSheet.create({
     fontSize: 56,
     fontWeight: '800',
     lineHeight: 44,
-    color: 'rgba(255, 255, 255, 0.35)',
     marginBottom: -Spacing.md,
   },
   quote: {
     ...Typography.body,
     fontStyle: 'italic',
-    color: '#FFFFFF',
     fontWeight: '600',
     marginBottom: Spacing.xs,
   },
   quoteAuthor: {
     ...Typography.caption,
-    color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'right',
   },
   title: {
     ...Typography.h1,
-    color: '#FFFFFF',
     marginTop: Spacing.sm,
   },
   titleNoQuote: {
@@ -157,7 +155,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...Typography.bodySmall,
-    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: Spacing.sm,
   },
   body: {

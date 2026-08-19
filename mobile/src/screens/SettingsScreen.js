@@ -18,6 +18,7 @@ import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows } from '../theme/spacing';
 import { formatTodayHours } from '../utils/openingHours';
+import { BREATHING_PATTERNS } from '../components/BreathingVisual';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light' },
@@ -66,6 +67,7 @@ export default function SettingsScreen() {
         notifications: settings.notifications,
         workoutReminderTime: settings.workoutReminderTime,
         restTimerSeconds: settings.restTimerSeconds,
+        breathingPattern: settings.breathingPattern || 'box',
         weeklyWorkoutGoal: settings.weeklyWorkoutGoal,
         calorieTarget: settings.calorieTarget,
         proteinTargetGrams: settings.proteinTargetGrams,
@@ -165,6 +167,26 @@ export default function SettingsScreen() {
                 active={s.restTimerSeconds === val}
                 onPress={() => updateField('restTimerSeconds', val)}
                 label={`${val}s`}
+                colors={colors}
+                styles={styles}
+              />
+            ))}
+          </Row>
+        </Card>
+
+        {/* ── Breathing Pattern ──────────────────────────────── */}
+        <Card colors={colors} styles={styles}>
+          <SectionTitle colors={colors} styles={styles}>Rest Breathing Pattern</SectionTitle>
+          <Text style={[styles.switchSub, { color: colors.textMuted, marginBottom: Spacing.md }]}>
+            Choose a guided breathing pattern to follow during rest periods.
+          </Text>
+          <Row>
+            {Object.values(BREATHING_PATTERNS).map((p) => (
+              <Option
+                key={p.id}
+                active={s.breathingPattern === p.id}
+                onPress={() => updateField('breathingPattern', p.id)}
+                label={p.label}
                 colors={colors}
                 styles={styles}
               />

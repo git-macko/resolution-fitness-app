@@ -70,7 +70,10 @@ type DailyNutrition struct {
 	WaterGoalMl  int     `json:"waterGoalMl"`
 	CalorieTarget int    `json:"calorieTarget"`
 	ProteinTarget float64 `json:"proteinTarget"`
-	Meals        []FoodLog `json:"meals,omitempty"`
+	// HasActivity is true when at least one meal or water entry was logged
+	// for the day. Clients show a "no update" state when it is false.
+	HasActivity  bool     `json:"hasActivity"`
+	Meals        []FoodLog `json:"meals"`
 }
 
 // WeeklyNutrition summarizes nutrition across 7 days.

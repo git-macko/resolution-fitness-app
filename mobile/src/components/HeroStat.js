@@ -17,24 +17,35 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Spacing } from '../theme/spacing';
 import Typography from '../theme/typography';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Map tone name -> StyleSheet key suffix.
 const toneKey = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Default');
 
 export default function HeroStatRow({ stats }) {
+  const { colors } = useTheme();
+
+  // Map tone → theme color keys
+  const toneColors = {
+    default: { value: colors.heroText, label: colors.heroTextMuted },
+    primary: { value: colors.heroStatPrimary, label: colors.heroStatPrimaryLabel },
+    info:    { value: colors.heroStatInfo, label: colors.heroStatInfoLabel },
+    warning: { value: colors.heroStatWarning, label: colors.heroStatWarningLabel },
+    error:   { value: colors.heroStatError, label: colors.heroStatErrorLabel },
+  };
+
   // stats: [{ value: '12', label: 'Workouts', tone?: 'primary' | ... }, ...]
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { backgroundColor: colors.heroStatBg }]}>
       {stats.map((s, i) => {
-        const valueStyle = styles[`value${toneKey(s.tone)}`] || styles.valueDefault;
-        const labelStyle = styles[`label${toneKey(s.tone)}`] || styles.labelDefault;
+        const tc = toneColors[s.tone] || toneColors.default;
         return (
           <React.Fragment key={`${s.label}-${i}`}>
             <View style={styles.cell}>
-              <Text style={valueStyle}>{s.value}</Text>
-              <Text style={labelStyle}>{s.label}</Text>
+              <Text style={[styles.value, { color: tc.value }]}>{s.value}</Text>
+              <Text style={[styles.label, { color: tc.label }]}>{s.label}</Text>
             </View>
-            {i < stats.length - 1 ? <View style={styles.divider} /> : null}
+            {i < stats.length - 1 ? <View style={[styles.divider, { backgroundColor: colors.heroStatDivider }]} /> : null}
           </React.Fragment>
         );
       })}
@@ -46,7 +57,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 14,
     paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.md,
@@ -55,69 +65,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  // ── Default tone: white on translucent background ────────
-  valueDefault: {
+  value: {
     ...Typography.statSmall,
-    color: '#FFFFFF',
     fontWeight: '800',
   },
-  labelDefault: {
+  label: {
     ...Typography.caption,
-    color: 'rgba(255, 255, 255, 0.78)',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  // ── Primary tone: amber (streak / level / focal stat) ────
-  valuePrimary: {
-    ...Typography.statSmall,
-    color: '#FCD34D',
-    fontWeight: '800',
-  },
-  labelPrimary: {
-    ...Typography.caption,
-    color: 'rgba(252, 211, 77, 0.92)',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  // ── Info tone: sky blue (water / protein / positive stat) ─
-  valueInfo: {
-    ...Typography.statSmall,
-    color: '#7DD3FC',
-    fontWeight: '800',
-  },
-  labelInfo: {
-    ...Typography.caption,
-    color: 'rgba(125, 211, 252, 0.92)',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  // ── Warning tone: warm amber (carbs / capacity warning) ───
-  valueWarning: {
-    ...Typography.statSmall,
-    color: '#FBBF24',
-    fontWeight: '800',
-  },
-  labelWarning: {
-    ...Typography.caption,
-    color: 'rgba(251, 191, 36, 0.92)',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  // ── Error tone: soft red (over-target / danger stat) ─────
-  valueError: {
-    ...Typography.statSmall,
-    color: '#FCA5A5',
-    fontWeight: '800',
-  },
-  labelError: {
-    ...Typography.caption,
-    color: 'rgba(252, 165, 165, 0.92)',
     marginTop: 2,
     textAlign: 'center',
   },
   divider: {
     width: 1,
     height: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
 });

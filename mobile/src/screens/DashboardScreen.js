@@ -18,6 +18,8 @@ import Card from '../components/Card';
 import MimiMark from '../components/MimiMark';
 import TodaysSummary from '../components/TodaysSummary';
 import GymCrowdCard from '../components/GymCrowdCard';
+import BuildInspirationCard from '../components/BuildInspirationCard';
+import NutritionSuggestionCard from '../components/NutritionSuggestionCard';
 import Logo from '../components/Logo';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
@@ -110,6 +112,12 @@ export default function DashboardScreen({ navigation }) {
     fetchDashboard();
   };
 
+  // ── Build Inspiration card edits (upload/delete) keep the
+  // dashboard state in sync without a full refetch.
+  const handleInspirationChange = useCallback((next) => {
+    setDashboard((prev) => ({ ...(prev || {}), buildInspiration: next }));
+  }, []);
+
   const handleReportCrowd = useCallback(async (level) => {
     if (!level) return;
     setReportingCrowd(true);
@@ -170,12 +178,12 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const QUICK_ACTIONS = useMemo(() => [
-    { id: 'plan', title: 'Plan Workout', sub: 'Create or start your routine', accent: '#EF4444', image: UNS + '1517836357463-d25dfeac3438?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Fitness') },
-    { id: 'meal', title: 'Log Meal', sub: 'Track your nutrition intake', accent: '#22C55E', image: UNS + '1490645935967-10de6ba17061?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health') },
-    { id: 'scan', title: 'Scan Food', sub: 'Snap a photo for nutrition facts', accent: '#3B82F6', image: UNS + '1546069901-ba9599a7e63c?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health', { screen: 'FoodScan' }) },
-    { id: 'water', title: 'Log Water', sub: 'Stay hydrated, track intake', accent: '#14B8A6', image: UNS + '1548839140-29a749e1cf4d?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health') },
-    { id: 'settings', title: 'Settings', sub: 'Customize your experience', accent: '#8B5CF6', image: UNS + '1512941937669-90a1b58e7e9c?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Account', { screen: 'Settings' }) },
-  ], [navigation]);
+    { id: 'plan', title: 'Plan Workout', sub: 'Create or start your routine', accent: colors.quickActionPlan, image: UNS + '1517836357463-d25dfeac3438?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Fitness') },
+    { id: 'meal', title: 'Log Meal', sub: 'Track your nutrition intake', accent: colors.quickActionMeal, image: UNS + '1490645935967-10de6ba17061?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health') },
+    { id: 'scan', title: 'Scan Food', sub: 'Snap a photo for nutrition facts', accent: colors.quickActionScan, image: UNS + '1546069901-ba9599a7e63c?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health', { screen: 'FoodScan' }) },
+    { id: 'water', title: 'Log Water', sub: 'Stay hydrated, track intake', accent: colors.quickActionWater, image: UNS + '1548839140-29a749e1cf4d?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Health') },
+    { id: 'settings', title: 'Settings', sub: 'Customize your experience', accent: colors.quickActionSettings, image: UNS + '1512941937669-90a1b58e7e9c?w=400&h=300&fit=crop', onPress: () => navigation.navigate('Account', { screen: 'Settings' }) },
+  ], [navigation, colors]);
 
   if (loading) {
     return (
@@ -261,6 +269,18 @@ export default function DashboardScreen({ navigation }) {
           reporting={reportingCrowd}
           onRefreshHours={handleRefreshHours}
           refreshingHours={refreshingHours}
+        />
+
+        {/* ── Build Inspiration ─────────────────────────────── */}
+        <BuildInspirationCard
+          data={ds.buildInspiration}
+          onChange={handleInspirationChange}
+        />
+
+        {/* ── Nutrition Suggestions ─────────────────────────── */}
+        <NutritionSuggestionCard
+          suggestions={ds.nutritionSuggestions}
+          onOpenHealth={() => navigation.navigate('Health')}
         />
 
         {/* ── Gym Facts ────────────────────────────────────── */}

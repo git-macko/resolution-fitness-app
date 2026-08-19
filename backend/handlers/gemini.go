@@ -21,7 +21,7 @@ var geminiKey string
 var geminiModel string
 
 // DefaultGeminiModel is the default model used for AI Coach chat and food scans.
-// The project is locked to gemini-3.5-flash; no other AI provider or model is used.
+// The project is locked to gemini-3.5-flash.
 const DefaultGeminiModel = "gemini-3.5-flash"
 
 // ErrQuotaExceeded is returned when the Gemini API reports that the

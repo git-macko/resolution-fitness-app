@@ -905,7 +905,7 @@ function makeStyles(theme) {
     // ── Context Menu ──────────────────────────────────────
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.25)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
     },
