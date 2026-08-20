@@ -24,7 +24,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Wraps a completed set row with a left-swipe gesture that reveals
 // an undo button. Defined outside the parent so it survives re-renders
 // from the 1s session timer without resetting its PanResponder / Animated state.
-const SwipeableSetRow = React.memo(function SwipeableSetRow({ children, onUndo, rowStyle }) {
+const SwipeableSetRow = React.memo(function SwipeableSetRow({ children, onUndo, rowStyle, colors }) {
   const panX = useRef(new Animated.Value(0)).current;
   const onUndoRef = useRef(onUndo);
   onUndoRef.current = onUndo;
@@ -167,11 +167,8 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
       const s = data.data || data || {};
       if (s.breathingPattern) setBreathingPattern(s.breathingPattern);
     }).catch(() => {});
-    // Fetch a motivational quote to show during rest periods
-    api.getRandomQuote().then((data) => {
-      const q = data.data || data || {};
-      if (q && q.text) setRestQuote({ text: q.text, author: q.author });
-    }).catch(() => {});
+    // Fetch initial motivational quote for the first rest period
+    fetchRestQuote();
     return () => {
       clearInterval(timerRef.current);
       clearInterval(sessionTimerRef.current);
@@ -454,12 +451,26 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
     }
   };
 
-  const startRestTimer = useCallback((seconds = 60) => {
-    setRestTimer(seconds);
-    setResting(true);
+  const lastQuoteIdRef = useRef(null);
+
+  const fetchRestQuote = useCallback(() => {
+    api.getRandomQuote(lastQuoteIdRef.current).then((data) => {
+      const q = data.data || data || {};
+      if (q && q.text) {
+        lastQuoteIdRef.current = q.id || null;
+        setRestQuote({ text: q.text, author: q.author });
+      }
+    }).catch(() => {});
   }, []);
 
+  const startRestTimer = useCallback((seconds = 60) => {
+    fetchRestQuote();
+    setRestTimer(seconds);
+    setResting(true);
+  }, [fetchRestQuote]);
+
   const skipRest = () => {
+    fetchRestQuote();
     setRestTimer(0);
     setResting(false);
     clearInterval(timerRef.current);
@@ -889,6 +900,7 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
                     styles.setRow,
                     { backgroundColor: colors.accentBg, borderWidth: 0, marginBottom: 0 },
                   ]}
+                  colors={colors}
                 >
                   {rowContent}
                 </SwipeableSetRow>
