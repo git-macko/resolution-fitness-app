@@ -3,7 +3,6 @@
 // All structs have JSON tags for serialization and are documented with comments.
 package models
 
-import "time"
 
 // ── Common Response Wrappers ─────────────────────────────────────────
 
@@ -36,49 +35,4 @@ type ErrorResponse struct {
 	Code  string `json:"code,omitempty"`
 }
 
-// ── Enums & Constants ────────────────────────────────────────────────
 
-// Meal types for food logging
-const (
-	MealTypePreWorkout  = "preworkout"
-	MealTypePostWorkout = "postworkout"
-	MealTypeGeneral     = "general"
-)
-
-// Fitness levels
-const (
-	FitnessBeginner     = "beginner"
-	FitnessIntermediate = "intermediate"
-	FitnessAdvanced     = "advanced"
-)
-
-// Primary goals
-const (
-	GoalWeightLoss    = "weight_loss"
-	GoalMuscleGain    = "muscle_gain"
-	GoalMaintenance   = "maintenance"
-	GoalEndurance     = "endurance"
-	GoalGeneral       = "general"
-)
-
-// Food log sources
-const (
-	SourceScan      = "scan"
-	SourceManual    = "manual"
-	SourceSuggestion = "suggestion"
-	SourceQuickAdd  = "quick_add"
-)
-
-// ── Helper types ─────────────────────────────────────────────────────
-
-// JSONString represents a JSON-encoded array stored as TEXT in SQLite.
-// Example: "[\"peanuts\", \"dairy\"]" stored in the allergies column.
-type JSONString string
-
-// ── Common time helper ───────────────────────────────────────────────
-
-// NowUTC returns the current time in UTC. Used throughout handlers
-// for consistent timestamp handling.
-func NowUTC() time.Time {
-	return time.Now().UTC()
-}
