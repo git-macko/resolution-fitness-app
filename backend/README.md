@@ -1,9 +1,12 @@
 # Resolution Fitness App — Backend
 
+**v1.0 — First Deployable Release** 🚀
+
 A Go REST API that powers the Resolution Fitness App (`../mobile`).
-Users, workout plans, sessions, nutrition, food scanning, weight/body/sleep tracking,
-AI coach chat, profile, settings, JWT auth — all behind a single `net/http` server
-running on `:8080` by default.
+Users, workout plans, sessions, nutrition, food scanning, body stats, weight/body/sleep tracking,
+AI coach chat, progression badges, build inspiration, exercise image generation,
+personalized daily goals, profile, settings, JWT auth — all behind a single `net/http` server
+running on `:8080` by default (71 routes, 57 tests).
 
 ---
 
@@ -43,14 +46,6 @@ the same SQLite C source into Go. The resulting driver is **100 % pure Go**, so:
 - The same backend builds, tests, and runs on Windows, macOS, Linux, in WSL, and
   in CI containers without any per-OS setup.
 
-The migration from cgo `mattn/go-sqlite3` to pure-Go `modernc.org/sqlite` removed:
-
-- the cgo dance (`CC=...`, `CXX=...`, WinLibs installs)
-- the `cc1.exe: sorry, unimplemented` failure mode
-- ~1 GB of MinGW/WinLibs toolchain footprint from contributor machines
-
-…and reduced first-time server startup from ~6 s to ~1 s on this Windows host.
-
 ### The driver-name alias — read this before adding any new driver
 
 `modernc.org/sqlite` registers itself in `database/sql` under the name **`"sqlite"`**.
@@ -78,7 +73,7 @@ _without_ callers needing to know that modernc is the underlying engine.
 # 1. Copy and edit environment
 cp .env.example .env
 # Edit JWT_SECRET (must be a strong random string in production)
-# Edit GEMINI_API_KEY (used for AI Coach + Food Scanner)
+# Edit GEMINI_API_KEY (used for AI Coach + Food Scanner + Exercise Images)
 
 # 2. Resolve modules
 go mod tidy
@@ -97,8 +92,6 @@ make fmt          # -> gofmt -w .
 make clean        # -> rm -f resolution-server
 ```
 
-
-
 ---
 
 ## Environment variables
@@ -111,7 +104,7 @@ Loaded from `.env` (or process env, `.env` overrides take precedence). See
 | `PORT` | HTTP listen port | `8080` |
 | `JWT_SECRET` | HMAC secret for signing auth tokens. **Must be a strong random string in production.** | falls back to a development placeholder (`change-me-in-production-use-a-strong-random-secret`) when unset — **do not ship to production without overriding this**. |
 | `DB_PATH` | SQLite file location | `./database.db` (falls back to `database.db` next to the executable when that file exists, so launching the binary from any directory opens the real backend DB) |
-| `GEMINI_API_KEY` | Power AI Coach chat + food photo analysis via Google Gemini | optional; AI endpoints fall back to simulated responses if absent |
+| `GEMINI_API_KEY` | Power AI Coach chat + food photo analysis + exercise images via Google Gemini | optional; AI endpoints fall back to simulated responses if absent |
 | `GEMINI_MODEL` | Gemini model used for chat + food scan | `gemini-3.5-flash` |
 | `BESTTIME_API_KEY` | Real gym crowd/busyness forecasts | optional; falls back to simulation |
 | `BESTTIME_API_URL` | BestTime API base URL | `https://besttime.app/api/v1` |
@@ -120,7 +113,7 @@ Loaded from `.env` (or process env, `.env` overrides take precedence). See
 
 ---
 
-## Endpoints
+## Endpoints (71 routes)
 
 Public:
 
@@ -143,12 +136,14 @@ Protected (require `Authorization: Bearer <jwt>`):
 - `/api/nutrition/**` — daily, meals, water, weekly, suggestions
 - `/api/food-scan/**` — scan, log, history
 - `/api/weight`, `/api/measurements`, `/api/sleep`
-- `/api/dashboard` — composite greeting + quote + health fact + fitness summary
+- `/api/dashboard` — composite greeting + quote + health fact + fitness summary + inspiration + suggestions
+- `/api/inspiration/**` — list, upload, delete, reorder build inspiration photos
+- `/api/badges` — progression badges (computed live from activity stats)
 - `/api/chat/**` — AI Coach chat (+ SSE stream), plan generation, history, suggestions, clear, delete
 - `/api/profile/gym`, `/api/profile/gym/refresh-hours` — gym preference + manual hours refresh
 - `/api/gym-crowd`, `/api/gym-crowd/report` — crowd estimate + user reports
 - `/api/gyms/search`, `/api/gyms/details` — gym autocomplete + details/opening hours
-- `/uploads/**` — static file serving for uploaded profile pics / food photos
+- `/uploads/**` — static file serving for uploaded profile pics / food photos / exercise images
 
 For the full payload/response contract of each route, see `../PROMPT.md` in the
 project root or look at the inline doc-comments above each handler in
@@ -164,13 +159,25 @@ go test ./... -v -count=1
 
 Expected output: **55/55 PASS** in the `handlers` package (workout-plan handlers,
 edge cases, clone / activate semantics, auto-delete, AI Coach chat, gym crowd,
-progression badges, food scan, exercise image generation) plus **1/1 PASS** in the `database` package
+progression badges, food scan, exercise image generation, meal suggestion ranking,
+inspiration photo CRUD) plus **1/1 PASS** in the `database` package
 (migration idempotency) and **1/1 PASS** in the `config` package (DB path resolution). `go vet ./...` is also clean.
 
-Tests live in `handlers/workouts_test.go`, `handlers/chat_test.go`,
-`handlers/gym_test.go`, `handlers/badges_test.go`, `handlers/inspiration_test.go`,
-`handlers/nutrition_test.go`, and `database/migrations_test.go`. The handler
-tests use an in-memory SQLite database (`database.Initialize(":memory:")`),
+**Total: 57 tests.**
+
+Tests live in:
+- `handlers/workouts_test.go` — plan limits, clone, activate, full integration, food scan
+- `handlers/chat_test.go` — AI Coach context building
+- `handlers/gym_test.go` — gym preference self-healing
+- `handlers/badges_test.go` — no activity, fitness activity, health-only activity
+- `handlers/goals_test.go` — goal formulas, onboarding seeding, recalculate endpoint
+- `handlers/inspiration_test.go` — photo upload limits, delete ownership, empty listing
+- `handlers/nutrition_test.go` — meal goal relevance scoring, goal-ranked suggestions
+- `handlers/exercise_image_test.go` — single/batch/status, edge cases, mime mapping
+- `database/migrations_test.go` — migration idempotency
+- `config/config_test.go` — DB path resolution
+
+All handler tests use an in-memory SQLite database (`database.Initialize(":memory:")`),
 which is a fast smoke check that the no-cgo driver is working in your environment.
 
 ---
@@ -179,24 +186,43 @@ which is a fast smoke check that the no-cgo driver is working in your environmen
 
 ```
 backend/
-├── main.go                    Server entrypoint — wires config, db, middleware, handlers
+├── main.go                    Server entrypoint — wires config, db, middleware, handlers (71 routes)
 ├── go.mod / go.sum            Module definition (Go 1.25+)
 ├── Makefile                   Common tasks (run, build, test, fmt, clean, deps)
 ├── .env / .env.example        Runtime config (don't commit `.env`)
 ├── database/
-│   └── database.go            SQLite open + schema migrations; DRIVER ALIAS init() lives here
-├── config/                    Env loading + defaults
-├── handlers/                  HTTP handlers, grouped by domain (one file each)
+│   ├── database.go            SQLite open + schema migrations; DRIVER ALIAS init() lives here
+│   └── migrations_test.go     Migration idempotency test
+├── config/
+│   ├── config.go              Env loading + defaults + DB path resolution
+│   └── config_test.go         DB path resolution test
+├── handlers/                  HTTP handlers, grouped by domain (20 files)
 │   ├── auth.go                register / login / refresh
 │   ├── profile.go             user profile CRUD, settings, gym preference
 │   ├── workouts.go            plan + session handlers
+│   ├── nutrition.go           daily nutrition, meals, water, weekly, goal-ranked suggestions
+│   ├── food_scan.go           food photo scan + Gemini Vision
+│   ├── exercise_image.go      AI exercise illustrations via Gemini 2.5 Flash Image
+│   ├── goals.go               personalized calorie/protein/water goals
+│   ├── badges.go              progression badge computation (live from stats)
+│   ├── inspiration.go         build inspiration photo CRUD (max 3)
 │   ├── gemini.go              Gemini API client (chat, streaming, food scan)
 │   ├── gym.go                 gym search/details, crowd estimates, opening hours
-│   ├── chat_test.go, gym_test.go, workouts_test.go, badges_test.go, inspiration_test.go, nutrition_test.go, goals_test.go  (46 cases, in-memory DB)
-│   ├── nutrition.go, food_scan.go, dashboard.go, chat.go, ...
+│   ├── tracking.go            weight, body measurements, sleep
+│   ├── dashboard.go           aggregated dashboard data (quotes, facts, summaries, inspiration, suggestions)
+│   ├── chat.go                AI Coach chat relay
+│   ├── *_test.go              57 tests (in-memory DB)
 ├── middleware/                CORS, request logger, AuthRequired
-├── models/                    Wire-format structs + DB row structs
-└── utils/                     Validation, response helpers, date helpers, file uploads
+├── models/                    Wire-format structs + DB row structs (7 files)
+│   ├── badges.go              Badge model
+│   ├── common.go              API response wrappers
+│   ├── content.go             Dashboard, inspiration, chat models
+│   ├── nutrition.go           Nutrition + food scan models
+│   ├── tracking.go            Weight, measurements, sleep models
+│   ├── user.go                User, settings, goals models
+│   └── workout.go             Plan, session, exercise models
+├── utils/                     Validation, response helpers, date helpers, file uploads
+└── uploads/                   Static file serving (profile pics, food photos, exercise images)
 ```
 
 ---
@@ -222,7 +248,7 @@ Tables: `users`, `user_settings`, `build_inspiration`, `user_stats`, `user_goals
 `sleep_logs`, `daily_quotes`, `health_facts`, `chat_messages`,
 `besttime_cache`, `gym_crowd_reports`.
 
-Seed data: 27 exercises, 21 daily quotes, 20 health facts (idempotent: only
+Seed data: 30 exercises, 21 daily quotes, 20 health facts (idempotent: only
 seeded when the relevant table is empty).
 
 ---
@@ -258,8 +284,12 @@ will be undone.
    sqlite3"). The single registration in `database/database.go` is canonical.
 
 5. **Tests stay in `go test ./...`.** Tests currently live in
-   `handlers/workouts_test.go`, `handlers/chat_test.go`, and
-   `handlers/gym_test.go`. New tests should stay inside their owning package
+   `handlers/workouts_test.go`, `handlers/chat_test.go`,
+   `handlers/gym_test.go`, `handlers/badges_test.go`,
+   `handlers/goals_test.go`, `handlers/inspiration_test.go`,
+   `handlers/nutrition_test.go`, `handlers/exercise_image_test.go`,
+   `database/migrations_test.go`, and `config/config_test.go`.
+   New tests should stay inside their owning package
    (e.g. `handlers/foo_test.go` next to `handlers/foo.go`), not in a top-level
    `tests/` directory.
 
@@ -267,7 +297,7 @@ If a tool needs an `import` that you suspect pulls in cgo, audit the dependency
 tree with:
 
 ```bash
-go list -deps ./... | xargs -I{} sh -c 'go list -f "{{.ImportPath}} {{.CgoFiles}}" {} 2>/dev/null | grep -v "\[\]" || true'
+go list -deps ./... | xargs -I{} sh -c 'go list -f "{{.ImportPath}} {{.CgoFiles}}" {} 2>/dev/null | grep -v "[]" || true'
 ```
 
 Empty `CgoFiles` means pure Go. Any non-empty entry in a transitive dep of the
@@ -318,4 +348,5 @@ top-level LICENSE file.)
 
 User-uploaded media is served from `/uploads/**` (configured in `main.go`).
 Gemini calls go through the shared client in `handlers/gemini.go`, used by
-`handlers/chat.go` (AI Coach) and `handlers/food_scan.go` (food scanner).
+`handlers/chat.go` (AI Coach), `handlers/food_scan.go` (food scanner),
+and `handlers/exercise_image.go` (exercise illustrations).

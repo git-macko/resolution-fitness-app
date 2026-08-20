@@ -1,5 +1,7 @@
 # Resolution Fitness — Project Overview
 
+**v1.0 — First Deployable Release** 🚀
+
 A full-stack gym fitness mobile app with a **Go backend** (REST API + SQLite) and a
 **React Native / Expo frontend** (4-tab mobile app).
 
@@ -10,7 +12,7 @@ A full-stack gym fitness mobile app with a **Go backend** (REST API + SQLite) an
 - **Router:** `net/http` with Go 1.22+ pattern matching (`"POST /api/plans/{planId}"`)
 - **Database:** SQLite via `modernc.org/sqlite` (pure-Go driver, WAL mode, foreign keys ON)
 - **Authentication:** JWT (`golang-jwt/jwt/v5`) with bcrypt password hashing
-- **Migrations:** Inline `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` additions on startup
+- **Migrations:** Inline `CREATE TABLE IF NOT EXISTS` + idempotent `ensureColumn()` additions on startup
 - **CORS:** Custom middleware
 - **Testing:** `testing` package with in-memory SQLite
 
@@ -18,7 +20,7 @@ A full-stack gym fitness mobile app with a **Go backend** (REST API + SQLite) an
 - **Framework:** React Native via Expo (SDK 54, managed workflow)
 - **Navigation:** React Navigation v7 (bottom tabs + native stacks)
 - **State:** React Context (AuthContext, ThemeContext)
-- **HTTP Client:** `fetch` with JWT interceptor
+- **HTTP Client:** `fetch` with JWT interceptor + SSE for streaming
 - **Expo Libraries:** expo-camera, expo-image-picker, expo-haptics,
   expo-linear-gradient, expo-splash-screen, expo-asset, expo-status-bar
 - **Testing:** Jest + jest-expo
@@ -28,27 +30,40 @@ A full-stack gym fitness mobile app with a **Go backend** (REST API + SQLite) an
 
 ```
 Resolution-fitnessapp/
-├── backend/                          # Go REST API server
+├── backend/                          # Go REST API server (65 endpoints)
 │   ├── main.go                       # Entry point, route registration, seeding
 │   ├── Makefile                      # run, build, test, clean
-│   ├── config/config.go              # Environment config (port, JWT secret, DB path)
+│   ├── config/config.go              # Environment config + DB path resolution
+│   ├── config/config_test.go         # DB path resolution tests
 │   ├── database/database.go          # SQLite connection + all table migrations
-│   ├── models/                       # Go structs (user, workout, nutrition, tracking, content, common)
+│   ├── database/migrations_test.go   # Migration idempotency tests
+│   ├── models/                       # Go structs (7 files)
+│   │   ├── badges.go                 # Badge model
+│   │   ├── common.go                 # API response wrappers
+│   │   ├── content.go                # Dashboard, inspiration, chat models
+│   │   ├── nutrition.go              # Nutrition + food scan models
+│   │   ├── tracking.go               # Weight, measurements, sleep models
+│   │   ├── user.go                   # User, settings, goals models
+│   │   └── workout.go                # Plan, session, exercise models
 │   ├── handlers/                     # HTTP handlers for all API endpoints
 │   │   ├── auth.go                   # Register, Login, Refresh
 │   │   ├── profile.go                # Get/Update Profile, Upload Picture, Settings, Onboarding
 │   │   ├── workouts.go               # Plans CRUD, SetActive, ClonePlan, Workout Sessions, Templates
 │   │   ├── nutrition.go              # Daily Nutrition, Meals, Water, Weekly Summary, Suggestions
 │   │   ├── food_scan.go              # Food Photo Scan + Google Gemini Vision API proxy
+│   │   ├── exercise_image.go         # AI exercise illustrations via Gemini 2.5 Flash Image
+│   │   ├── goals.go                  # Personalized calorie/protein/water goals
+│   │   ├── badges.go                 # Progression badge computation
+│   │   ├── inspiration.go            # Build Inspiration photo CRUD
 │   │   ├── gemini.go                 # Gemini API client (chat, streaming, food scan)
 │   │   ├── gym.go                    # Gym prefs, crowd estimates, opening hours
 │   │   ├── tracking.go               # Weight, Body Measurements, Sleep
 │   │   ├── dashboard.go              # Aggregated dashboard data
-│   │   └── chat.go                   # AI Coach chat relay
+│   │   ├── chat.go                   # AI Coach chat relay
+│   │   ├── *_test.go                 # 57 tests (in-memory SQLite)
 │   ├── middleware/middleware.go       # JWT Auth, CORS, Request Logger
 │   ├── utils/                        # response.go, validation.go, date_helpers.go
-│   ├── handlers/*_test.go            # 46 unit + integration tests (workouts, chat, gym, badges, food-scan, goals)
-│   ├── uploads/                      # Static file serving (profile pics, food photos)
+│   ├── uploads/                      # Static file serving (profile pics, food photos, exercise images)
 │   └── database.db                   # SQLite database file (auto-created)
 │
 ├── mobile/                           # React Native Expo app
@@ -59,32 +74,37 @@ Resolution-fitnessapp/
 │   ├── tsconfig.json                 # TypeScript config stub
 │   ├── src/
 │   │   ├── api/
-│   │   │   ├── client.js             # HTTP client + token management
+│   │   │   ├── client.js             # HTTP client + token management (65 API methods)
 │   │   │   └── config.js             # API base URL config
-│   │   ├── components/               # Reusable UI components
+│   │   ├── components/               # 15 reusable UI components
+│   │   │   ├── AutocompleteInput.js  # Debounced autocomplete text input
+│   │   │   ├── BreathingVisual.js    # Breathing overlay for rest screens
+│   │   │   ├── BuildInspirationCard.js # Photo carousel for dashboard
 │   │   │   ├── Card.js               # Generic card container
+│   │   │   ├── CarouselDots.js       # Pagination dots for carousels
 │   │   │   ├── ExerciseLibrary.js    # Exercise browser with muscle group filters
 │   │   │   ├── GymCrowdCard.js       # Gym crowd / opening-hours card
-│   │   │   ├── AutocompleteInput.js  # Debounced autocomplete text input
 │   │   │   ├── HeroCard.js           # Dashboard hero card
 │   │   │   ├── HeroStat.js           # Dashboard stat display
 │   │   │   ├── Logo.js               # App logo component
 │   │   │   ├── MimiMark.js           # Branded mark component
+│   │   │   ├── NutritionSuggestionCard.js # Goal-ranked meal suggestion carousel
+│   │   │   ├── PhotoLightbox.js      # Full-screen photo viewer
 │   │   │   ├── SplashAnimation.js    # Animated splash screen overlay
 │   │   │   └── TodaysSummary.js      # Dashboard daily summary
 │   │   ├── contexts/
 │   │   │   ├── AuthContext.js         # Global auth state
 │   │   │   └── ThemeContext.js        # Light/dark theme state
 │   │   ├── navigation/
-│   │   │   └── AppNavigator.js        # Tab + stack navigation
-│   │   ├── screens/                   # All app screens
+│   │   │   └── AppNavigator.js        # Tab + stack navigation (4 tabs, 14 screens)
+│   │   ├── screens/                   # All app screens (14 + tests)
 │   │   │   ├── LoginScreen.js, RegisterScreen.js, OnboardingScreen.js
 │   │   │   ├── DashboardScreen.js, FitnessScreen.js
 │   │   │   ├── HealthScreen.js, FoodScanScreen.js, ScanHistoryScreen.js
 │   │   │   ├── AccountScreen.js, SettingsScreen.js
 │   │   │   ├── ChatScreen.js
 │   │   │   ├── CreatePlanScreen.js, WorkoutExecutionScreen.js, ExerciseDetailScreen.js
-│   │   │   └── __tests__/            # Screen-level tests
+│   │   │   └── __tests__/            # Screen-level tests (33 total)
 │   │   ├── theme/                    # Theme system
 │   │   │   ├── card.js               # Card style presets
 │   │   │   ├── outlineText.js        # Outline text style helper
@@ -94,10 +114,12 @@ Resolution-fitnessapp/
 │   │   │   └── __tests__/            # Theme tests
 │   │   └── utils/
 │   │       ├── dates.js              # Date formatting helpers
+│   │       ├── imageUrl.js           # Image URL resolution
 │   │       ├── openingHours.js       # Opening-hours parsing/formatting helpers
-│   │       └── usePressScale.js      # Press animation hook
+│   │       ├── usePressScale.js      # Press animation hook
+│   │       └── __tests__/            # Utility tests
 │
-└── PROMPT.md                         # Project overview & API reference
+└── PROMPT.md                         # This file
 ```
 
 ## Key Features Implemented
@@ -125,21 +147,24 @@ Resolution-fitnessapp/
 - Set tracking per exercise
 - **Workout visuals:** demo image/GIF of the current exercise with emoji fallback
 - **Rest screens:** full-screen breathing overlay with a motivational quote and skip control
+- **Breathing patterns:** configurable via Settings (Box, 4-7-8, Deep, Calm)
 - Complete workout → stats update, XP gain, streak calculation, level-up
 - Cancel/save-as-draft
 - Workout history with pagination
 
 ### Exercise Library
-- 25+ exercises across chest, back, legs, shoulders, arms, core, cardio
+- 27 exercises across chest, back, legs, shoulders, arms, core, cardio
 - Filter by muscle group, search by name
 - **AI-generated exercise illustrations** — clean fitness art via Gemini 2.5 Flash Image, cached locally
 - Full details: instructions, tips, common mistakes
 
 ### Dashboard
-- Daily motivational quotes (20+ seeded)
-- Health & gym science facts (20+ seeded)
+- Daily motivational quotes (21 seeded)
+- Health & gym science facts (20 seeded)
 - Fitness progression: XP, level, workout count, volume, streak
 - Weekly workout completion rate
+- **Build Inspiration** — user-uploaded photo carousel (max 3)
+- **Nutrition Suggestions** — goal-ranked meal ideas
 
 ### Gym Crowd & Opening Hours
 - Gym selection with autocomplete (Google Places when configured, Nominatim fallback)
@@ -187,16 +212,15 @@ These are from the original specification but deferred or simplified:
 
 - **PostgreSQL** — Using SQLite instead (simpler, no server needed for dev)
 - **Dedicated `services/` layer** — Business logic is in handlers (simpler for current scope)
-- **Versioned migration files** — Using inline `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE`
+- **Versioned migration files** — Using inline `CREATE TABLE IF NOT EXISTS` + `ensureColumn()`
 - **TypeScript** — Using JavaScript for the Expo app (faster iteration)
-- **Workout Templates** — Cached in-memory Go structs (not seeded in DB yet)
 - **Offline resilience** — No local caching of API data
 - **Push notifications** — Not configured
 - **Drag-and-drop exercise reordering** — Not implemented
 - **BMI calculator** — Not implemented
 - **Data export** — Not implemented
 
-## API Endpoints
+## API Endpoints (71 routes)
 
 ### Auth (public)
 | Method | Path | Description |
@@ -258,13 +282,13 @@ These are from the original specification but deferred or simplified:
 ### Nutrition (protected)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/nutrition/daily` | Daily summary |
+| GET | `/api/nutrition/daily` | Daily summary (`?date=` for specific date) |
 | POST | `/api/nutrition/meals` | Log meal |
 | PUT | `/api/nutrition/meals/{mealId}` | Update meal |
 | DELETE | `/api/nutrition/meals/{mealId}` | Delete meal |
 | POST | `/api/nutrition/water` | Log water intake |
 | GET | `/api/nutrition/weekly` | Weekly summary |
-| GET | `/api/nutrition/suggestions` | Meal suggestions |
+| GET | `/api/nutrition/suggestions` | Goal-ranked meal suggestions |
 
 ### Food Scanner (protected)
 | Method | Path | Description |
@@ -280,6 +304,14 @@ These are from the original specification but deferred or simplified:
 | DELETE | `/api/weight/{logId}` | Delete weight entry |
 | GET/POST | `/api/measurements` | Body measurements |
 | GET/POST | `/api/sleep` | Sleep logs |
+
+### Build Inspiration (protected)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/inspiration` | List user's inspiration photos |
+| POST | `/api/inspiration/photos` | Upload inspiration photo (max 3) |
+| DELETE | `/api/inspiration/photos/{photoId}` | Delete inspiration photo |
+| PUT | `/api/inspiration/reorder` | Reorder photos |
 
 ### Gym Crowd (protected)
 | Method | Path | Description |
@@ -297,7 +329,7 @@ These are from the original specification but deferred or simplified:
 ### Dashboard & Chat (protected)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/dashboard` | Aggregated dashboard data |
+| GET | `/api/dashboard` | Aggregated dashboard data (quotes, facts, summaries, inspiration, suggestions) |
 | POST | `/api/chat` | Send message to AI Coach |
 | POST | `/api/chat/stream` | Stream AI Coach reply (SSE) |
 | POST | `/api/chat/plan` | Generate + save a weekly plan from natural language |
@@ -305,6 +337,12 @@ These are from the original specification but deferred or simplified:
 | GET | `/api/chat/suggestions` | Suggested prompts |
 | DELETE | `/api/chat/history` | Clear history |
 | DELETE | `/api/chat/history/{messageId}` | Delete a single message |
+
+### Quotes & Facts (protected)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/quotes` | Random motivational quote |
+| GET | `/api/facts` | Random health fact |
 
 ### Misc
 | Method | Path | Description |
@@ -346,7 +384,8 @@ AI Coach chat (fallback, streaming, history, plan generation), gym crowd
 badges (no activity, fitness activity, health-only activity), daily-goal
 recommendations (goal-aware formulas, onboarding seeding, recalculate endpoint),
 exercise image generation (single/batch/status, edge cases, mime mapping),
-and a food-scan integration test against a real image.
+meal suggestion ranking (goal-aware ordering), inspiration photo CRUD,
+DB path resolution, and migration idempotency.
 
 ### Mobile
 ```bash
@@ -354,17 +393,19 @@ cd Resolution-fitnessapp/mobile
 npx jest
 ```
 
-Tests cover theme utilities and screen components (33 tests total),
-including the Health tab Quick Log, goal progress, suggestion-add,
-meal-delete flows, and the no-update day state.
+33 tests covering: theme utilities, outline text rendering, imageUrl resolution,
+FitnessScreen plan cards (expand/collapse, mode badges, goals),
+and HealthScreen Quick Log, goal progress, suggestion-add, meal-delete flows.
+
+**Total: 90 tests across the full stack.**
 
 ## Design Decisions
 
 - **SQLite over PostgreSQL** for zero-config development — no server needed
-- **Inline migrations** over versioned migration files — simpler for a single-developer project
+- **Pure-Go SQLite driver** (`modernc.org/sqlite`) — no C compiler required, cross-platform
+- **Inline migrations** with `ensureColumn()` — idempotent, zero log noise on existing DBs
 - **JavaScript over TypeScript** for the mobile app — faster iteration (tsconfig included as stub)
 - **Theme system** — Light/dark mode supported via ThemeContext with reactive StatusBar
-- **Pure-Go SQLite driver** (`modernc.org/sqlite`) — no C compiler required, cross-platform
 - **Splash screen** — Custom animated overlay with logo fade + overlay fade-out via expo-splash-screen
 - **Handlers contain business logic** over a separate `services/` layer —
   keeps the codebase simpler at this scale
@@ -374,3 +415,9 @@ meal-delete flows, and the no-update day state.
   foreign keys lack `ON DELETE CASCADE` (e.g., `workout_sessions`)
 - **Progression stats reset** on active routine switch — progression is
   tied to consistency with a specific routine
+- **Goal-aware meal ranking** — suggestions are sorted by the user's
+  primary fitness goal (protein-forward for muscle gain, lighter for weight loss)
+- **Badge computation is live** — no badge state is persisted; every
+  request evaluates the current stats for freshness
+- **DB path resolution** — binary looks for `database.db` next to the
+  executable first, then falls back to cwd; prevents silent fresh DBs
