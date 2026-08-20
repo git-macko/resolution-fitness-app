@@ -196,7 +196,7 @@ const TAB_ICONS = {
 // ── Animated Tab Icon ─────────────────────────────────────────────
 // Bounces aggressively (scale + lift) when the tab becomes active.
 // The icon overshoots then settles for a lively, playful feel.
-function TabIcon({ label, focused, color, accentColor }) {
+function TabIcon({ label, focused, color }) {
   const scale = useRef(new Animated.Value(focused ? 1.2 : 1)).current;
   const translateY = useRef(new Animated.Value(focused ? -4 : 0)).current;
   const opacity = useRef(new Animated.Value(focused ? 1 : 0.55)).current;
@@ -273,17 +273,14 @@ function TabIcon({ label, focused, color, accentColor }) {
     };
   }, [focused]);
 
-  const [outlineName, filledName] = TAB_ICONS[label] || [
-    'ellipse-outline',
-    'ellipse',
-  ];
+  const [outlineName, filledName] = TAB_ICONS[label] || ['ellipse-outline', 'ellipse'];
   const name = focused ? filledName : outlineName;
 
   return (
     <Animated.View
       style={[
         styles.iconWrap,
-        focused && { backgroundColor: hexAlpha(accentColor, 0.12) },
+        focused && { backgroundColor: hexAlpha(color, 0.08) },
         { transform: [{ scale }, { translateY }], opacity },
       ]}
     >
@@ -329,10 +326,10 @@ function MainTabs() {
         headerShown: false,
         animation: 'fade',
         tabBarIcon: ({ focused, color }) => (
-          <TabIcon label={route.name} focused={focused} color={color} accentColor={colors.tabBarActive} />
+          <TabIcon label={route.name} focused={focused} color={color} />
         ),
         tabBarButton: (props) => <TabButton {...props} />,
-        tabBarActiveTintColor: colors.tabBarActive,
+        tabBarActiveTintColor: colors.textPrimary,
         tabBarInactiveTintColor: colors.tabBarInactive,
         tabBarStyle: {
           backgroundColor: colors.tabBarBg,
