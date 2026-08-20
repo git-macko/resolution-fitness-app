@@ -343,12 +343,12 @@ function MainTabs() {
           paddingTop: 8,
           ...Platform.select({
             ios: {
-              shadowColor: colors.shadow,
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 8,
+              shadowColor: 'transparent',
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0,
+              shadowRadius: 0,
             },
-            android: { elevation: 8 },
+            android: { elevation: 0 },
           }),
         },
         tabBarLabelStyle: {
