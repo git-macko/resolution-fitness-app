@@ -18,6 +18,7 @@ import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Layout } from '../theme/spacing';
 import usePressScale from '../utils/usePressScale';
+import { resolveImageUrl } from '../utils/imageUrl';
 
 export default function AccountScreen({ navigation }) {
   const { user, updateUser, logout } = useAuth();
@@ -180,7 +181,7 @@ export default function AccountScreen({ navigation }) {
           <TouchableOpacity onPress={handlePickPhoto} style={styles.heroAvatarWrap}>
             <View style={[styles.heroAvatar, { backgroundColor: colors.heroAvatarBg }]}>
               {user?.photoUrl ? (
-                <Image source={{ uri: user.photoUrl }} style={styles.heroAvatarImage} />
+                <Image source={{ uri: resolveImageUrl(user.photoUrl) }} style={styles.heroAvatarImage} />
               ) : (
                 <Text style={styles.heroAvatarPlaceholder}>
                   {(user?.displayName || 'A')[0].toUpperCase()}
