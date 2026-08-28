@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -66,6 +67,21 @@ type Config struct {
 	// fallback for gym opening hours when Google Places is unavailable.
 	// Defaults to the public Overpass API endpoint.
 	OverpassAPIURL string
+
+	// RateLimitPerMinute is the general per-IP request allowance for the
+	// whole API. 0 disables rate limiting entirely (development default).
+	RateLimitPerMinute int
+
+	// AuthRateLimitPerMinute is the stricter per-IP allowance for public
+	// auth endpoints (register/login) to prevent brute-force attacks.
+	// 0 falls back to RateLimitPerMinute.
+	AuthRateLimitPerMinute int
+
+	// AIRateLimitPerMinute is the per-IP allowance for AI-powered endpoints
+	// (chat, plan generation, food scans, exercise images) that call paid
+	// upstream APIs, protecting against runaway Gemini usage.
+	// 0 falls back to RateLimitPerMinute.
+	AIRateLimitPerMinute int
 }
 
 // Load reads configuration from environment variables.
@@ -158,6 +174,16 @@ func Load() *Config {
 		overpassAPIURL = "https://overpass-api.de/api/interpreter"
 	}
 
+	// ── Rate limits (per client IP, per minute) ───────────────────
+	// All default to 0 = disabled, so local development is unaffected.
+	// Set them on the deploy target to protect against abuse:
+	//   RATE_LIMIT_PER_MINUTE=120        (whole API)
+	//   AUTH_RATE_LIMIT_PER_MINUTE=10    (register/login)
+	//   AI_RATE_LIMIT_PER_MINUTE=20      (Gemini-backed endpoints)
+	rateLimitPerMinute := envInt("RATE_LIMIT_PER_MINUTE", 0)
+	authRateLimitPerMinute := envInt("AUTH_RATE_LIMIT_PER_MINUTE", 0)
+	aiRateLimitPerMinute := envInt("AI_RATE_LIMIT_PER_MINUTE", 0)
+
 	cfg := &Config{
 		AppEnv:             appEnv,
 		Port:               port,
@@ -167,9 +193,12 @@ func Load() *Config {
 		GeminiModel:        geminiModel,
 		BestTimeAPIKey:     bestTimeAPIKey,
 		BestTimeAPIURL:     bestTimeAPIURL,
-		GooglePlacesAPIKey: googlePlacesAPIKey,
-		OverpassAPIURL:     overpassAPIURL,
-		CORSAllowedOrigins: corsAllowedOrigins,
+		GooglePlacesAPIKey:     googlePlacesAPIKey,
+		OverpassAPIURL:         overpassAPIURL,
+		CORSAllowedOrigins:     corsAllowedOrigins,
+		RateLimitPerMinute:     rateLimitPerMinute,
+		AuthRateLimitPerMinute: authRateLimitPerMinute,
+		AIRateLimitPerMinute:   aiRateLimitPerMinute,
 	}
 	if err := cfg.validate(); err != nil {
 		log.Fatalf("FATAL: %v", err)
@@ -199,6 +228,20 @@ func (c *Config) validate() error {
 			"in production (APP_ENV=production). Generate one with: openssl rand -base64 48")
 	}
 	return nil
+}
+
+// envInt reads an integer environment variable, returning fallback when
+// the variable is empty or not a valid number.
+func envInt(key string, fallback int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return n
 }
 
 // redactSecret shortens a secret for safe logging (never logs the full value).

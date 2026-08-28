@@ -44,6 +44,15 @@ func main() {
 	handlers.InitOverpassAPIURL(cfg.OverpassAPIURL)
 	middleware.InitMiddleware(cfg.JWTSecret)
 
+	// ── Step 3b: Rate limiters (per client IP) ───────────────────
+	// 0 (the development default) disables rate limiting entirely.
+	// Production: set RATE_LIMIT_PER_MINUTE plus the stricter
+	// AUTH_RATE_LIMIT_PER_MINUTE and AI_RATE_LIMIT_PER_MINUTE.
+	rateLimiters := buildRateLimiters(cfg)
+	generalLimiter := rateLimiters.general
+	authLimiter := rateLimiters.auth
+	aiLimiter := rateLimiters.ai
+
 	// ── Step 4: Seed the database with initial data ───────────────
 	// Exercises, motivational quotes, and health facts are seeded
 	// automatically on first run (checked by watching for empty tables).
@@ -58,8 +67,9 @@ func main() {
 	mux.HandleFunc("GET /api/health", handlers.HealthCheck)
 
 	// --- Auth routes (public) ---
-	mux.HandleFunc("POST /api/auth/register", handlers.Register)
-	mux.HandleFunc("POST /api/auth/login", handlers.Login)
+	// Rate-limited per IP to slow down brute-force attempts.
+	mux.Handle("POST /api/auth/register", rateLimit(authLimiter, http.HandlerFunc(handlers.Register)))
+	mux.Handle("POST /api/auth/login", rateLimit(authLimiter, http.HandlerFunc(handlers.Login)))
 	mux.HandleFunc("POST /api/auth/refresh", withAuth(handlers.RefreshToken))
 
 	// --- Profile routes (protected) ---
@@ -84,8 +94,9 @@ func main() {
 	// --- Exercise Library routes ---
 	mux.HandleFunc("GET /api/exercises", handlers.GetExercises)
 	mux.HandleFunc("GET /api/exercises/{exerciseId}", handlers.GetExercise)
-	mux.Handle("POST /api/exercises/{exerciseId}/generate-image", protect(handlers.GenerateExerciseImage))
-	mux.Handle("POST /api/exercises/generate-images", protect(handlers.GenerateAllExerciseImages))
+	// AI image generation is rate-limited (paid upstream API).
+	mux.Handle("POST /api/exercises/{exerciseId}/generate-image", rateLimit(aiLimiter, protect(handlers.GenerateExerciseImage)))
+	mux.Handle("POST /api/exercises/generate-images", rateLimit(aiLimiter, protect(handlers.GenerateAllExerciseImages)))
 	mux.Handle("GET /api/exercises/generate-images/status", protect(handlers.GetExerciseImageStatus))
 
 	// --- Weekly Plans routes (protected) ---
@@ -118,7 +129,8 @@ func main() {
 	mux.Handle("GET /api/nutrition/suggestions", protect(handlers.GetMealSuggestions))
 
 	// --- Food Scanner routes (protected) ---
-	mux.Handle("POST /api/food-scan", protect(handlers.ScanFood))
+	// Photo analysis calls Gemini (paid), so it gets the AI rate limit.
+	mux.Handle("POST /api/food-scan", rateLimit(aiLimiter, protect(handlers.ScanFood)))
 	mux.Handle("POST /api/food-scan/log", protect(handlers.LogScannedFood))
 	mux.Handle("GET /api/food-scan/history", protect(handlers.GetScanHistory))
 
@@ -152,9 +164,10 @@ func main() {
 	mux.Handle("GET /api/facts", protect(handlers.GetRandomFact))
 
 	// --- AI Chat routes (protected) ---
-	mux.Handle("POST /api/chat", protect(handlers.Chat))
-	mux.Handle("POST /api/chat/stream", protect(handlers.ChatStream))
-	mux.Handle("POST /api/chat/plan", protect(handlers.ChatPlan))
+	// Chat and plan generation call Gemini (paid), so they get the AI rate limit.
+	mux.Handle("POST /api/chat", rateLimit(aiLimiter, protect(handlers.Chat)))
+	mux.Handle("POST /api/chat/stream", rateLimit(aiLimiter, protect(handlers.ChatStream)))
+	mux.Handle("POST /api/chat/plan", rateLimit(aiLimiter, protect(handlers.ChatPlan)))
 	mux.Handle("GET /api/chat/history", protect(handlers.GetChatHistory))
 	mux.Handle("GET /api/chat/suggestions", protect(handlers.GetChatSuggestions))
 	mux.Handle("DELETE /api/chat/history", protect(handlers.ClearChatHistory))
@@ -166,9 +179,16 @@ func main() {
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", fileServer))
 
 	// ── Step 6: Apply middleware chain ────────────────────────────
-	// Outer: CORS → RequestLogger → Inner: Actual router
+	// Outer: CORS → General Rate Limit → RequestLogger → Inner: Actual router
 	// CORS uses the whitelist from CORS_ALLOWED_ORIGINS (empty = allow all).
-	handler := middleware.CORS(cfg.CORSAllowedOrigins)(middleware.RequestLogger(mux))
+	// The general rate limit (if configured) caps requests per IP across
+	// the whole API; auth and AI routes carry their own stricter limits.
+	var handler http.Handler = mux
+	if generalLimiter != nil {
+		handler = middleware.RateLimit(generalLimiter)(handler)
+	}
+	handler = middleware.RequestLogger(handler)
+	handler = middleware.CORS(cfg.CORSAllowedOrigins)(handler)
 
 	// ── Step 7: Start the server ──────────────────────────────────
 	addr := fmt.Sprintf(":%s", cfg.Port)
@@ -182,6 +202,44 @@ func main() {
 }
 
 // ── Middleware Wrappers ──────────────────────────────────────────────
+
+// rateLimit wraps a handler with the given IP rate limiter (if configured)
+// and passes it through unchanged when the limiter is nil. The wrapped
+// handler is returned as an http.Handler, so it can wrap AuthRequired
+// (http.Handler) or a bare HandlerFunc as needed.
+func rateLimit(limiter *middleware.RateLimiter, handler http.Handler) http.Handler {
+	if limiter == nil {
+		return handler
+	}
+	return middleware.RateLimit(limiter)(handler)
+}
+
+// rateLimiters bundles the three per-IP rate limiters built from config.
+// Each entry is nil when its config value is 0 (disabled).
+type rateLimiters struct {
+	general *middleware.RateLimiter
+	auth    *middleware.RateLimiter
+	ai      *middleware.RateLimiter
+}
+
+// buildRateLimiters converts config values (requests per minute) into
+// token bucket limiters. A value of 0 disables that limiter.
+func buildRateLimiters(cfg *config.Config) rateLimiters {
+	toLimiter := func(perMinute int) *middleware.RateLimiter {
+		if perMinute <= 0 {
+			return nil
+		}
+		// Rate in tokens/sec; burst equals one minute's allowance so a
+		// client can use their full minute budget at once, then refills
+		// at one token per (60/perMinute) seconds.
+		return middleware.NewRateLimiter(float64(perMinute)/60.0, float64(perMinute))
+	}
+	return rateLimiters{
+		general: toLimiter(cfg.RateLimitPerMinute),
+		auth:    toLimiter(cfg.AuthRateLimitPerMinute),
+		ai:      toLimiter(cfg.AIRateLimitPerMinute),
+	}
+}
 
 // protect is a shorthand for wrapping a handler with AuthRequired middleware.
 // It validates the JWT token, extracts the user ID, and injects it into context.

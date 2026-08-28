@@ -94,3 +94,31 @@ func TestValidateDevelopmentToleratesWeakSecret(t *testing.T) {
 		}
 	}
 }
+
+// ── Rate limit config parsing ───────────────────────────────────────
+
+// TestEnvInt verifies envInt parses numbers and falls back on bad input.
+func TestEnvInt(t *testing.T) {
+	cases := []struct {
+		name     string
+		value    string
+		fallback int
+		want     int
+	}{
+		{"unset → fallback", "", 120, 120},
+		{"valid number", "60", 120, 60},
+		{"zero is allowed", "0", 120, 0},
+		{"negative → fallback", "-5", 120, 120},
+		{"non-numeric → fallback", "abc", 120, 120},
+		{"whitespace tolerated", " 30 ", 120, 30},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Setenv("TEST_ENV_INT", tc.value)
+			defer os.Unsetenv("TEST_ENV_INT")
+			if got := envInt("TEST_ENV_INT", tc.fallback); got != tc.want {
+				t.Errorf("envInt(%q, %d) = %d, want %d", tc.value, tc.fallback, got, tc.want)
+			}
+		})
+	}
+}

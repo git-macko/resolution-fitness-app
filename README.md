@@ -53,15 +53,15 @@ Configure the backend URL in `mobile/src/api/config.js`.
 
 ```bash
 cd Resolution-fitnessapp/backend
-go test ./... -v   # 102 tests (workouts, chat, gym, badges, goals, food-scan, exercise images, CORS, config, migrations)
+go test ./... -v   # 109 tests (workouts, chat, gym, badges, goals, food-scan, exercise images, CORS, rate limiting, config, migrations)
 ```
 
 ```bash
 cd Resolution-fitnessapp/mobile
-npx jest            # 33 tests (theme utils, screens incl. Health Quick Log)
+npx jest            # 57 tests (theme utils, all 4 tab screens: Dashboard, Fitness, Health, Account)
 ```
 
-**Total: 135 tests across the full stack.**
+**Total: 166 tests across the full stack.**
 
 ---
 
@@ -149,7 +149,7 @@ npx jest            # 33 tests (theme utils, screens incl. Health Quick Log)
 | **Auth** | JWT (`golang-jwt/jwt/v5`) with 72h expiry |
 | **Database** | SQLite (WAL mode, foreign keys ON) |
 | **AI** | Google Gemini (chat, food scan, exercise images) |
-| **Testing** | Go `testing` package + Jest (90 tests total) |
+| **Testing** | Go `testing` package + Jest (166 tests total) |
 
 ---
 
@@ -286,10 +286,11 @@ Before deploying to production:
 - [ ] Set a strong `JWT_SECRET` (≥ 32 chars) — generate with `openssl rand -base64 48` (the server refuses to start without it in production)
 - [ ] Set `CORS_ALLOWED_ORIGINS` to your exact web origins (empty = allow all; native apps unaffected)
 - [ ] Set `GEMINI_API_KEY` for AI Coach + Food Scanner
+- [ ] Set rate limits: `RATE_LIMIT_PER_MINUTE` (e.g. 120), `AUTH_RATE_LIMIT_PER_MINUTE` (e.g. 10), `AI_RATE_LIMIT_PER_MINUTE` (e.g. 20) — 0 disables
 - [ ] Configure `GOOGLE_PLACES_API_KEY` for gym autocomplete (optional)
 - [ ] Set `BESTTIME_API_KEY` for real crowd data (optional)
 - [ ] Deploy with Docker (`docker build -t resolution-backend backend`) or the static binary
 - [ ] Ensure `./uploads/` (or the `/app/uploads` volume) exists and is writable
 - [ ] Set `mobile/app.json` → `extra.backendUrl` to the production backend URL before EAS production builds
-- [ ] Run full test suite: `go test ./... -v` (102 backend) + `npx jest` (33 mobile)
+- [ ] Run full test suite: `go test ./... -v` (109 backend) + `npx jest` (57 mobile)
 - [ ] Smoke test `GET /api/health` after deploying
