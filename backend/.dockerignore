@@ -1,0 +1,26 @@
+# ── Secrets — never bake these into an image ─────────────────────────
+.env
+.env.local
+
+# ── Runtime data ──────────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+uploads/
+handlers/uploads/
+
+# ── Build artifacts ───────────────────────────────────────────────────
+resolution-server
+resolution-server.exe
+*.exe
+server-test*
+backend-test-build
+*.log
+
+# ── VCS / IDE / OS ────────────────────────────────────────────────────
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+Thumbs.db

@@ -1,9 +1,10 @@
-// Package config — tests for database path resolution.
+// Package config — tests for database path resolution and startup validation.
 package config
 
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,5 +48,49 @@ func TestResolveDBPath(t *testing.T) {
 	got = resolveDBPath(explicit, filepath.Join(exeDir, "server.exe"))
 	if got != explicit {
 		t.Errorf("env override should beat executable-adjacent db, got %q", got)
+	}
+}
+
+// ── Production-safe JWT secret validation ────────────────────────────
+
+// TestValidateProductionRequiresStrongSecret verifies the server refuses
+// to start in production mode with a missing, placeholder, or short secret.
+func TestValidateProductionRequiresStrongSecret(t *testing.T) {
+	cases := []struct {
+		name   string
+		secret string
+	}{
+		{"missing secret", ""},
+		{"placeholder secret", placeholderJWTSecret},
+		{"too-short secret", "short-secret"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{AppEnv: "production", JWTSecret: tc.secret}
+			if err := cfg.validate(); err == nil {
+				t.Fatalf("expected error for production JWT_SECRET %q, got nil", tc.secret)
+			} else if !strings.Contains(err.Error(), "JWT_SECRET") {
+				t.Errorf("error should mention JWT_SECRET, got: %v", err)
+			}
+		})
+	}
+}
+
+// TestValidateProductionAcceptsStrongSecret verifies a strong secret
+// (>= 32 chars) passes production validation.
+func TestValidateProductionAcceptsStrongSecret(t *testing.T) {
+	strong := "this-is-a-very-strong-random-secret-0123456789abcdef"
+	if err := (&Config{AppEnv: "production", JWTSecret: strong}).validate(); err != nil {
+		t.Fatalf("strong secret should pass production validation, got: %v", err)
+	}
+}
+
+// TestValidateDevelopmentToleratesWeakSecret verifies development mode
+// never blocks startup, even with a placeholder secret.
+func TestValidateDevelopmentToleratesWeakSecret(t *testing.T) {
+	for _, secret := range []string{"", placeholderJWTSecret, "short"} {
+		if err := (&Config{AppEnv: "development", JWTSecret: secret}).validate(); err != nil {
+			t.Errorf("development mode should tolerate secret %q, got error: %v", secret, err)
+		}
 	}
 }

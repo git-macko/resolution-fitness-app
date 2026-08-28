@@ -53,7 +53,7 @@ Configure the backend URL in `mobile/src/api/config.js`.
 
 ```bash
 cd Resolution-fitnessapp/backend
-go test ./... -v   # 57 tests (workouts, chat, gym, badges, goals, food-scan, exercise images, migrations, config)
+go test ./... -v   # 102 tests (workouts, chat, gym, badges, goals, food-scan, exercise images, CORS, config, migrations)
 ```
 
 ```bash
@@ -61,7 +61,7 @@ cd Resolution-fitnessapp/mobile
 npx jest            # 33 tests (theme utils, screens incl. Health Quick Log)
 ```
 
-**Total: 90 tests across the full stack.**
+**Total: 135 tests across the full stack.**
 
 ---
 
@@ -242,15 +242,54 @@ Full API reference in [PROMPT.md](PROMPT.md).
 
 ---
 
+## Deployment
+
+The backend now fails fast in production: it refuses to start (`APP_ENV=production`) with a missing, placeholder, or short `JWT_SECRET`. CORS is whitelist-configurable via `CORS_ALLOWED_ORIGINS`. Native mobile apps are unaffected by CORS (they send no Origin header).
+
+### Backend (Docker)
+
+```bash
+cd backend
+docker build -t resolution-backend .
+docker run -p 8080:8080 \
+  --env-file .env \
+  -e APP_ENV=production \
+  -e JWT_SECRET=$(openssl rand -base64 48) \
+  -e CORS_ALLOWED_ORIGINS=https://app.yourdomain.com \
+  -v resolution-data:/app/data \
+  resolution-backend
+```
+
+- The container stores the SQLite DB in `/app/data` and uploads in `/app/uploads` (both volumes).
+- Or deploy the static binary directly: `go build -o resolution-server .`
+
+### Mobile (EAS Build)
+
+```bash
+cd mobile
+npm i -g eas-cli        # once
+eas login               # once
+eas build:configure     # once — wires up the profiles in eas.json
+
+npm run build:dev       # development build (Expo Go companion / dev client)
+npm run build:preview   # internal test build (installable APK/IPA)
+npm run build:prod      # store-ready build (App Store / Play Store)
+```
+
+Before a **production** build, set the deployed backend URL in `mobile/app.json` → `extra.backendUrl` (e.g. `https://api.yourdomain.com`). Leave it empty for local development (auto-detection kicks in).
+
 ## Deployment Checklist
 
 Before deploying to production:
 
-- [ ] Set a strong `JWT_SECRET` (≥ 32 chars) in `.env`
+- [ ] Set `APP_ENV=production` on the server
+- [ ] Set a strong `JWT_SECRET` (≥ 32 chars) — generate with `openssl rand -base64 48` (the server refuses to start without it in production)
+- [ ] Set `CORS_ALLOWED_ORIGINS` to your exact web origins (empty = allow all; native apps unaffected)
 - [ ] Set `GEMINI_API_KEY` for AI Coach + Food Scanner
 - [ ] Configure `GOOGLE_PLACES_API_KEY` for gym autocomplete (optional)
 - [ ] Set `BESTTIME_API_KEY` for real crowd data (optional)
-- [ ] Update `mobile/src/api/config.js` to point to production backend URL
-- [ ] Run `go build -o resolution-server .` and deploy the binary
-- [ ] Ensure `./uploads/` directory exists and is writable
-- [ ] Run full test suite: `go test ./... -v` (57 backend) + `npx jest` (33 mobile)
+- [ ] Deploy with Docker (`docker build -t resolution-backend backend`) or the static binary
+- [ ] Ensure `./uploads/` (or the `/app/uploads` volume) exists and is writable
+- [ ] Set `mobile/app.json` → `extra.backendUrl` to the production backend URL before EAS production builds
+- [ ] Run full test suite: `go test ./... -v` (102 backend) + `npx jest` (33 mobile)
+- [ ] Smoke test `GET /api/health` after deploying

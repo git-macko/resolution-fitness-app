@@ -29,6 +29,8 @@
       "expo-camera",
       "expo-image-picker"
     ],
-    "extra": {}
+    "extra": {
+      "backendUrl": ""
+    }
   }
 }

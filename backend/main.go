@@ -167,7 +167,8 @@ func main() {
 
 	// ── Step 6: Apply middleware chain ────────────────────────────
 	// Outer: CORS → RequestLogger → Inner: Actual router
-	handler := middleware.CORS(middleware.RequestLogger(mux))
+	// CORS uses the whitelist from CORS_ALLOWED_ORIGINS (empty = allow all).
+	handler := middleware.CORS(cfg.CORSAllowedOrigins)(middleware.RequestLogger(mux))
 
 	// ── Step 7: Start the server ──────────────────────────────────
 	addr := fmt.Sprintf(":%s", cfg.Port)

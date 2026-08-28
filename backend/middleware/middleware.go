@@ -38,30 +38,75 @@ func InitMiddleware(secret string) {
 // This allows the mobile app (running on a different origin) to communicate
 // with the backend server. Without CORS, browsers/expo-web would block requests.
 //
+// allowedOrigins controls which browser origins may call the API:
+//   - empty list       → Access-Control-Allow-Origin: * (development default)
+//   - non-empty list   → whitelist mode: only exact matches from the list are
+//     echoed back; any other origin receives no CORS headers and the browser
+//     blocks the response. Preflights from unknown origins get 403.
+//
+// Native mobile apps (Expo Go, production builds) do not send an Origin
+// header, so they are never subject to these rules and always pass through.
+//
 // Headers added:
-//   - Access-Control-Allow-Origin: * (allow all origins — mobile app has no fixed origin)
+//   - Access-Control-Allow-Origin (see above)
 //   - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
 //   - Access-Control-Allow-Headers: Content-Type, Authorization
 //   - Access-Control-Max-Age: 86400 (cache preflight for 24 hours)
+//   - Vary: Origin (when in whitelist mode, so caches key on the origin)
 //
 // OPTIONS requests (preflight) are handled automatically with a 200 OK response.
-func CORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Max-Age", "86400")
+func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
 
-		// ── Handle preflight (OPTIONS) requests ────────────────────
-		// Browsers send an OPTIONS request before cross-origin POST/PUT.
-		// We respond 200 OK immediately — the actual request follows.
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
+			if len(allowedOrigins) > 0 {
+				// ── Whitelist mode ───────────────────────────────────
+				if origin != "" && !contains(allowedOrigins, origin) {
+					// Unknown origin: no CORS headers → browser blocks.
+					// For preflights we answer 403 outright.
+					if r.Method == http.MethodOptions {
+						w.WriteHeader(http.StatusForbidden)
+						return
+					}
+					next.ServeHTTP(w, r)
+					return
+				}
+				if origin != "" {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Add("Vary", "Origin")
+				}
+				// No Origin header (native app / curl) → pass through.
+			} else {
+				// ── Development mode: allow all origins ───────────────
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			}
+
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+
+			// ── Handle preflight (OPTIONS) requests ──────────────────
+			// Browsers send an OPTIONS request before cross-origin POST/PUT.
+			// We respond 200 OK immediately — the actual request follows.
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// contains reports whether s is present in the list.
+func contains(list []string, s string) bool {
+	for _, item := range list {
+		if item == s {
+			return true
 		}
-
-		next.ServeHTTP(w, r)
-	})
+	}
+	return false
 }
 
 // ── AuthRequired Middleware ──────────────────────────────────────────

@@ -4,22 +4,38 @@
 package config
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 // Config holds all application configuration values.
 // These are loaded from environment variables with sensible defaults.
+// placeholderJWTSecret is the development fallback. The server refuses to
+// start in production mode while this (or any other weak) secret is in use.
+const placeholderJWTSecret = "change-me-in-production-use-a-strong-random-secret"
+
 type Config struct {
+	// AppEnv is the runtime environment: "development" (default) or "production".
+	// In production the server enforces stricter startup validation (see Validate).
+	AppEnv string
+
 	// Port is the TCP port the server listens on (e.g., "8080").
 	Port string
 
 	// JWTSecret is the secret key used to sign and validate JWT tokens.
 	// In production, this MUST be a strong random string (at least 32 chars).
 	JWTSecret string
+
+	// CORSAllowedOrigins is the list of origins permitted to call the API.
+	// Empty means "allow all" (development default). When set, only these
+	// exact origins receive CORS headers — everything else is blocked.
+	// Native mobile apps do not send an Origin header and are never affected.
+	CORSAllowedOrigins []string
 
 	// DBPath is the file path to the SQLite database file.
 	// Defaults to "./database.db" in the current working directory.
@@ -68,12 +84,33 @@ func Load() *Config {
 		port = "8080"
 	}
 
+	// ── App Environment ─────────────────────────────────────────────
+	// Default: development. Set APP_ENV=production on the deploy target.
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		appEnv = "development"
+	}
+
 	// ── JWT Secret ───────────────────────────────────────────────────
 	// Default: a development placeholder. Must be changed in production!
-	// In production, use: export JWT_SECRET=$(openssl rand -base64 32)
+	// In production, use: export JWT_SECRET=$(openssl rand -base64 48)
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		jwtSecret = "change-me-in-production-use-a-strong-random-secret"
+		jwtSecret = placeholderJWTSecret
+	}
+
+	// ── CORS Allowed Origins ────────────────────────────────────────
+	// Comma-separated list of exact origins allowed to call the API.
+	// Empty (default) → allow all origins; useful for local development.
+	// Native mobile apps don't send an Origin header, so they always work.
+	var corsAllowedOrigins []string
+	if raw := os.Getenv("CORS_ALLOWED_ORIGINS"); raw != "" {
+		for _, origin := range strings.Split(raw, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				corsAllowedOrigins = append(corsAllowedOrigins, origin)
+			}
+		}
 	}
 
 	// ── Database Path ────────────────────────────────────────────────
@@ -121,7 +158,8 @@ func Load() *Config {
 		overpassAPIURL = "https://overpass-api.de/api/interpreter"
 	}
 
-	return &Config{
+	cfg := &Config{
+		AppEnv:             appEnv,
 		Port:               port,
 		JWTSecret:          jwtSecret,
 		DBPath:             dbPath,
@@ -131,7 +169,44 @@ func Load() *Config {
 		BestTimeAPIURL:     bestTimeAPIURL,
 		GooglePlacesAPIKey: googlePlacesAPIKey,
 		OverpassAPIURL:     overpassAPIURL,
+		CORSAllowedOrigins: corsAllowedOrigins,
 	}
+	if err := cfg.validate(); err != nil {
+		log.Fatalf("FATAL: %v", err)
+	}
+	return cfg
+}
+
+// validate enforces production-safe startup configuration.
+// It fails fast on conditions that would be a security risk
+// or a silent misconfiguration in production.
+func (c *Config) validate() error {
+	if c.AppEnv != "production" {
+		// Development: a placeholder secret is acceptable, but warn loudly
+		// so the developer knows tokens are forgeable.
+		if c.JWTSecret == placeholderJWTSecret || len(c.JWTSecret) < 32 {
+			log.Printf("⚠️  WARNING: JWT_SECRET is weak or the placeholder (%q). "+
+				"This is fine for development but MUST be a strong random string (>= 32 chars) "+
+				"before deploying. Generate one with: openssl rand -base64 48",
+				redactSecret(c.JWTSecret))
+		}
+		return nil
+	}
+
+	// ── Production checks (fail fast) ─────────────────────────────
+	if c.JWTSecret == "" || c.JWTSecret == placeholderJWTSecret || len(c.JWTSecret) < 32 {
+		return errors.New("JWT_SECRET must be a strong random string of at least 32 characters " +
+			"in production (APP_ENV=production). Generate one with: openssl rand -base64 48")
+	}
+	return nil
+}
+
+// redactSecret shortens a secret for safe logging (never logs the full value).
+func redactSecret(s string) string {
+	if len(s) <= 4 {
+		return "****"
+	}
+	return s[:2] + "..." + s[len(s)-2:]
 }
 
 // resolveDBPath picks the database file to open.
