@@ -265,6 +265,17 @@ docker run -p 8080:8080 \
 - The container stores the SQLite DB in `/app/data` and uploads in `/app/uploads` (both volumes).
 - Or deploy the static binary directly: `go build -o resolution-server .`
 
+### Backend (Render — free tier, zero cost)
+
+The repo ships a [`render.yaml`](backend/render.yaml) blueprint. Steps:
+
+1. Push the repo to GitHub.
+2. In [render.com](https://render.com) → **New → Blueprint** → pick your repo. Render detects `render.yaml` and creates the service with free-tier defaults.
+3. After the first deploy, set your real `GEMINI_API_KEY` (and optionally `GOOGLE_PLACES_API_KEY` / `BESTTIME_API_KEY`) under **Settings → Environment**.
+4. Copy the service URL (e.g. `https://resolution-backend.onrender.com`) into `mobile/app.json → extra.backendUrl` before building the mobile app.
+
+> ⚠️ **Free-tier caveats:** the free service sleeps after ~15 min idle (first request wakes it in ~30s) and its filesystem is **ephemeral** — the SQLite DB and uploads reset on every redeploy. Great for demos; upgrade for persistent data.
+
 ### Mobile (EAS Build)
 
 ```bash

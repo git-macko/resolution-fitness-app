@@ -1,0 +1,56 @@
+# ── Resolution Fitness — Render Blueprint (Free Tier) ─────────────────
+# Deploy with:  render blueprint launch  (after: git push + GitHub repo)
+# Or connect the repo in the Render dashboard and it will pick up this file.
+#
+# Uses Render's native Go runtime (no Docker context issues). The Dockerfile
+# remains available for local runs and self-hosting.
+#
+# ⚠️ FREE TIER NOTE: Render free web services use an EPHEMERAL filesystem.
+# The SQLite database (./database.db) and uploads (./uploads) are wiped on
+# every redeploy. Fine for demos — for persistent data, upgrade the service
+# or move the DB to a managed database later.
+#
+# Free tier also spins the service down after ~15 min of inactivity.
+# The first request after sleep takes ~30s to wake up.
+
+services:
+  - type: web
+    name: resolution-backend
+    runtime: go
+    plan: free
+    # Everything needed to build/run lives under backend/.
+    rootDir: backend
+    buildCommand: go build -o server .
+    startCommand: ./server
+    healthCheckPath: /api/health
+    envVars:
+      # ── Environment ────────────────────────────────────────────
+      - key: APP_ENV
+        value: production
+      # ── Secrets (auto-generated on first deploy) ───────────────
+      # Render generates a strong random value and stores it securely.
+      - key: JWT_SECRET
+        generateValue: true
+      # ── CORS ───────────────────────────────────────────────────
+      # Empty = allow all origins (fine for a native mobile app,
+      # which sends no Origin header). Set if you add a web client.
+      - key: CORS_ALLOWED_ORIGINS
+        value: ""
+      # ── Rate limiting (per client IP, per minute) ──────────────
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "120"
+      - key: AUTH_RATE_LIMIT_PER_MINUTE
+        value: "10"
+      - key: AI_RATE_LIMIT_PER_MINUTE
+        value: "20"
+      # ── AI keys — paste your real values in the Render dashboard ─
+      # after the first deploy (Settings → Environment).
+      - key: GEMINI_API_KEY
+        sync: false
+      # ── Optional integrations ──────────────────────────────────
+      # - key: GOOGLE_PLACES_API_KEY
+      #   sync: false
+      # - key: BESTTIME_API_KEY
+      #   sync: false
+      # - key: GEMINI_MODEL
+      #   value: gemini-3.5-flash
