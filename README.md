@@ -1,5 +1,7 @@
 # Resolution Fitness
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **v1.0 — First Deployable Release** 🚀
 
 A full-stack gym fitness mobile app — Go REST API backend + React Native (Expo) frontend.
