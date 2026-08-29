@@ -3,21 +3,18 @@
 # The web build talks to the production backend on Render via
 # extra.backendUrl in app.json.
 #
-# Usage:
-#   cd mobile
-#   npm i -g netlify-cli
-#   netlify deploy --prod --dir dist
+# Usage (drag-and-drop, no build):
+#   1) cd mobile && npm run export:web        # produces mobile/dist
+#   2) Drag the mobile/dist folder onto Netlify
 #
-# Note: the backend URL (extra.backendUrl) is read from app.json at build
-# time, so rebuild before deploying if you change it.
+# Usage (git-connected auto-deploy): just push to main — Netlify runs the
+# build command below against the repo root.
 
+# The web app lives under mobile/, so run everything relative to it.
 [build]
-  # Expo's static web export lives in mobile/dist after `expo export`.
-  publish = "mobile/dist"
-
-  # Optional: uncomment to let Netlify run the build on every git push.
-  # command = "npx expo export --platform web"
-  # base = "mobile"
+  base = "mobile"
+  publish = "dist"
+  command = "npm run export:web"
 
 # SPA fallback — every route falls back to index.html for client-side nav.
 [[redirects]]
