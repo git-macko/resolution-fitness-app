@@ -267,7 +267,7 @@ docker run -p 8080:8080 \
 
 ### Backend (Render — free tier, zero cost)
 
-The repo ships a [`render.yaml`](backend/render.yaml) blueprint. Steps:
+The repo ships a [`render.yaml`](render.yaml) blueprint at the repo root. Steps:
 
 1. Push the repo to GitHub.
 2. In [render.com](https://render.com) → **New → Blueprint** → pick your repo. Render detects `render.yaml` and creates the service with free-tier defaults.
@@ -290,6 +290,50 @@ npm run build:prod      # store-ready build (App Store / Play Store)
 ```
 
 Before a **production** build, set the deployed backend URL in `mobile/app.json` → `extra.backendUrl` (e.g. `https://api.yourdomain.com`). Leave it empty for local development (auto-detection kicks in).
+
+## Showcase & Demo (free)
+
+Two zero-cost ways to show the app to recruiters or friends — a clickable web
+link and a side-loadable Android APK. Both talk to the deployed Render
+backend via `mobile/app.json → extra.backendUrl`.
+
+### Live web link (Netlify, free)
+
+Deploys the React Native app as an interactive web demo anyone can open in a
+browser (no iPhone/Android needed). Builds on Git push if connected, or
+manually:
+
+```bash
+cd mobile
+npm run export:web        # static build → mobile/dist
+npx netlify-cli deploy --prod --dir dist
+```
+
+You get a public URL like `https://resolution-fitness.netlify.app` to share.
+The [`netlify.toml`](netlify.toml) at the repo root sets the publish dir and
+a SPA fallback.
+
+> Browser builds can't use the camera (food scan) or some device APIs, but the
+> full UI, navigation, AI coach, and data flows work.
+
+### Installable Android APK (EAS Build, free)
+
+The free EAS plan produces a shareable, side-loadable **APK**:
+
+```bash
+cd mobile
+npm i -g eas-cli
+npx eas-cli login         # free expo.dev account
+npm run build:preview     # → .apk (buildType apk, see eas.json)
+```
+
+Install the APK on any Android phone (allow "install unknown apps"). Play
+Store publishing is a one-time $25 fee — see [eas.json](mobile/eas.json).
+
+> For iOS, 'preview' produces an IPA that requires the $99/yr Apple Developer
+> Program to install outside your own device.
+
+---
 
 ## Deployment Checklist
 

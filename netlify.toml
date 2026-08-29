@@ -1,0 +1,33 @@
+# ── Resolution Fitness — Netlify config (free web showcase) ───────────
+# Deploys the mobile app as an interactive web demo that anyone can open.
+# The web build talks to the production backend on Render via
+# extra.backendUrl in app.json.
+#
+# Usage:
+#   cd mobile
+#   npm i -g netlify-cli
+#   netlify deploy --prod --dir dist
+#
+# Note: the backend URL (extra.backendUrl) is read from app.json at build
+# time, so rebuild before deploying if you change it.
+
+[build]
+  # Expo's static web export lives in mobile/dist after `expo export`.
+  publish = "mobile/dist"
+
+  # Optional: uncomment to let Netlify run the build on every git push.
+  # command = "npx expo export --platform web"
+  # base = "mobile"
+
+# SPA fallback — every route falls back to index.html for client-side nav.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers for the demo (optional but clean).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
