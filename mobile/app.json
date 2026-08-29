@@ -30,7 +30,7 @@
       "expo-image-picker"
     ],
     "extra": {
-      "backendUrl": ""
+      "backendUrl": "https://resolution-backend.onrender.com"
     }
   }
 }
