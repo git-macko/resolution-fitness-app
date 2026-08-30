@@ -299,8 +299,13 @@ function TabIcon({ label, focused, color, accentColor }) {
 // ── Tab Button ───────────────────────────────────────────────────
 // Simple Pressable wrapper that fires haptic feedback on tap.
 // The press animation lives in TabIcon, not here.
-function TabButton({ children, onPress, ...rest }) {
+function TabButton({ children, onPress, href, ...rest }) {
   const handlePress = (e) => {
+    // RN web renders tab buttons as <a href="/..."> anchors. If we let href
+    // through, tapping a tab triggers a real full page navigation (the app
+    // reloads and resets to the Dashboard tab). Stripping href keeps the press
+    // as in-memory navigation on both web and native.
+    e?.preventDefault?.();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress?.(e);
   };
