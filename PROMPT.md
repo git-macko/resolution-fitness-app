@@ -408,7 +408,7 @@ GitHub ──► GitHub Actions (CI: tests on every push)
    │
    ├──push──► Render  ──► https://resolution-backend.onrender.com  (Go API + SQLite + uploads)
    │
-   └──push──► Netlify ──► https://resolution-fitness.netlify.app  (React Native web demo)
+   └──push──► Netlify ──► https://resolutionfitnesshealth.netlify.app  (React Native web demo)
    │
    └───────────────────► mobile/app.json → extra.backendUrl  (points the app at the API)
 ```

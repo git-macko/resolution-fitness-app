@@ -309,7 +309,7 @@ npm run export:web        # static build → mobile/dist
 npx netlify-cli deploy --prod --dir dist
 ```
 
-You get a public URL like `https://resolution-fitness.netlify.app` to share.
+You get a public URL like `https://resolutionfitnesshealth.netlify.app` to share.
 The [`netlify.toml`](netlify.toml) at the repo root sets the publish dir and
 a SPA fallback.
 
@@ -344,7 +344,7 @@ GitHub ──► GitHub Actions (CI: tests on every push)
    │
    ├──push──► Render  ──► https://resolution-backend.onrender.com  (Go API + SQLite + uploads)
    │
-   └──push──► Netlify ──► https://resolution-fitness.netlify.app  (React Native web demo)
+   └──push──► Netlify ──► https://resolutionfitnesshealth.netlify.app  (React Native web demo)
    │
    └───────────────────► mobile/app.json → extra.backendUrl  (points the app at the API)
 ```
