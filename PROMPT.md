@@ -399,6 +399,52 @@ and HealthScreen Quick Log, goal progress, suggestion-add, meal-delete flows.
 
 **Total: 90 tests across the full stack.**
 
+## Full-Stack Deployment Workflow (Git → CI → Live)
+
+The project is shipped as **two independently deployed pieces** that talk over HTTPS:
+
+```
+GitHub ──► GitHub Actions (CI: tests on every push)
+   │
+   ├──push──► Render  ──► https://resolution-backend.onrender.com  (Go API + SQLite + uploads)
+   │
+   └──push──► Netlify ──► https://resolution-fitness.netlify.app  (React Native web demo)
+   │
+   └───────────────────► mobile/app.json → extra.backendUrl  (points the app at the API)
+```
+
+| Layer | Host | Updates on | Config |
+|-------|------|------------|--------|
+| **Frontend (web demo)** | Netlify (free) | push to `main` | `netlify.toml` (`base=mobile`, builds `dist/`)
+| **Backend (API/DB)** | Render (free) | push to `main` | `render.yaml` (native Go runtime, free plan)
+| **CI (tests)** | GitHub Actions | every push / PR | `.github/workflows/ci.yml`
+| **Mobile (store builds)** | EAS Build | manual | `mobile/eas.json` (dev / preview / prod)
+
+### Deploy loop
+
+```bash
+git add . && git commit -m "describe the change" && git push origin main
+```
+
+1. **Push** to GitHub.
+2. **CI** runs backend tests (`go test`/`go vet`) and mobile checks (`tsc`/`jest`)
+   in parallel as a safety gate.
+3. **Render** and **Netlify** each auto-redeploy from the push (they do **not** wait
+   for CI — keep a red Actions tab from going live by pushing tested code).
+4. **Hard-refresh** the browser to see the new web build.
+
+### Secrets never live in git
+
+Real env vars (`GEMINI_API_KEY`, `JWT_SECRET`, rate-limit config) are set in the
+Render dashboard, not committed. `backend/.env.example` documents them.
+
+### ⚠️ Free-tier caveat
+
+Render's free plan uses an ephemeral filesystem: `database.db` and `uploads/` reset
+on every backend redeploy. The app re-seeds itself, so it always boots — but user
+data starts fresh after each push. Upgrade or move to persistent storage when
+real data persistence is needed.
+
 ## Design Decisions
 
 - **SQLite over PostgreSQL** for zero-config development — no server needed

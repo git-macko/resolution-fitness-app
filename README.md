@@ -335,6 +335,63 @@ Store publishing is a one-time $25 fee — see [eas.json](mobile/eas.json).
 
 ---
 
+## Full-Stack Deployment Workflow (Git → CI → Live)
+
+This project ships as **two independently deployed pieces** that talk over HTTPS:
+
+```
+GitHub ──► GitHub Actions (CI: tests on every push)
+   │
+   ├──push──► Render  ──► https://resolution-backend.onrender.com  (Go API + SQLite + uploads)
+   │
+   └──push──► Netlify ──► https://resolution-fitness.netlify.app  (React Native web demo)
+   │
+   └───────────────────► mobile/app.json → extra.backendUrl  (points the app at the API)
+```
+
+| Layer | Host | Updates when | Files deployed |
+|-------|------|--------------|----------------|
+| **Frontend (web demo)** | Netlify (free) | a commit is **pushed** to `main` | `mobile/` web export (`netlify.toml`)
+| **Backend (API/DB)** | Render (free) | a commit is **pushed** to `main` | `backend/` Go service (`render.yaml`)
+| **CI (tests)** | GitHub Actions | every push / PR to `main` | `.github/workflows/ci.yml`
+| **Mobile (store builds)** | EAS Build | manual, on demand | `mobile/eas.json` profiles
+
+### The edit → push → deploy loop
+
+Every time you want a change live:
+
+```bash
+git add .
+git commit -m "describe the change"
+git push origin main
+```
+
+1. **Push** to GitHub.
+2. **GitHub Actions (CI)** runs `go test` + `go vet` (backend) and `tsc` + `jest` (mobile)
+   in parallel — a safety gate that catches broken code before it goes live.
+3. **Render** auto-redeploys the backend; **Netlify** auto-redeploys the web demo.
+4. **Hard-refresh** your browser afterward to clear the cached old bundle.
+
+> ⚠️ Netlify and Render each deploy on *their own* push trigger and do **not** wait
+> for CI. A red CI won't block a push from going live — check the Actions tab and
+> avoid pushing broken commits.
+
+### Environment secrets live on the hosts, NOT in git
+
+The repo contains **no real secrets**. `GEMINI_API_KEY`, `JWT_SECRET` (auto-generated),
+`CORS_ALLOWED_ORIGINS`, and the rate-limit vars are set in the Render dashboard
+(Settings → Environment) and read from `backend/.env.example` by the config.
+
+### ⚠️ Free-tier caveat: Render wipes data on each redeploy
+
+Render's free plan uses an **ephemeral filesystem** — the SQLite DB (`database.db`)
+and `uploads/` are wiped every time the backend redeploys. The app re-seeds itself
+(exercises, quotes, facts), so it always works, but user accounts/data start fresh
+after each push. Upgrade to a paid plan or move to persistent storage when you
+need real data persistence.
+
+---
+
 ## Deployment Checklist
 
 Before deploying to production:
