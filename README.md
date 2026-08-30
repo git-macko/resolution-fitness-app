@@ -10,6 +10,16 @@ Plan your workouts, track progress with XP/levels/streaks, scan food for nutriti
 
 ---
 
+## 🚀 Try the live demo
+
+> **👉 [resolutionfitnesshealth.netlify.app](https://resolutionfitnesshealth.netlify.app)**
+>
+> Open the link in any browser, **register a free account**, and explore the whole app — workouts, AI coach, food scanner, nutrition tracking, and more. No install needed.
+>
+> Live backend: [`https://resolution-backend.onrender.com`](https://resolution-backend.onrender.com) · Android APK: see [Showcase & Demo](#showcase--demo-free)
+
+---
+
 ## Architecture
 
 ```
