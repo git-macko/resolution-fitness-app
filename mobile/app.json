@@ -23,14 +23,22 @@
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#454746"
       },
-      "package": "com.resolution.fitness"
+      "package": "com.resolution.fitness",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-camera",
       "expo-image-picker"
     ],
     "extra": {
-      "backendUrl": "https://resolution-backend.onrender.com"
-    }
+      "backendUrl": "https://resolution-backend.onrender.com",
+      "eas": {
+        "projectId": "bbe1a28a-6520-4e1d-b101-bc8813edfd09"
+      }
+    },
+    "owner": "dashbeast"
   }
 }

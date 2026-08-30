@@ -46,6 +46,7 @@
   "devDependencies": {
     "@babel/core": "^7.26.0",
     "@resvg/resvg-js": "^2.6.2",
+    "eas-cli": "^23.0.0",
     "sharp": "^0.35.2"
   },
   "private": true
