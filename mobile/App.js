@@ -11,6 +11,7 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashAnimation from './src/components/SplashAnimation';
+import MobileFrame from './src/components/MobileFrame';
 
 // Keep the native splash visible until our JS-driven animation takes over.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -41,11 +42,16 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <ThemedStatusBar />
-          <AppNavigator />
-          {!splashDone && (
-            <SplashAnimation isReady onFadeComplete={handleSplashComplete} />
-          )}
+          {/* In a desktop browser the app sits inside a phone-sized frame,
+              like an emulator preview. Native and narrow browser windows
+              render full screen. */}
+          <MobileFrame>
+            <ThemedStatusBar />
+            <AppNavigator />
+            {!splashDone && (
+              <SplashAnimation isReady onFadeComplete={handleSplashComplete} />
+            )}
+          </MobileFrame>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
