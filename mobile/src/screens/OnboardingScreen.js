@@ -5,8 +5,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, Alert, ActivityIndicator,
+  StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import api from '../api/client';
@@ -74,7 +75,7 @@ export default function OnboardingScreen({ navigation }) {
 
   const handleComplete = async () => {
     if (!fitnessLevel || !primaryGoal) {
-      Alert.alert('Incomplete', 'Please select your fitness level and goal.');
+      showAlert('Incomplete', 'Please select your fitness level and goal.');
       return;
     }
 
@@ -92,7 +93,7 @@ export default function OnboardingScreen({ navigation }) {
       });
       updateUser(data.data || data);
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to save onboarding.');
+      showAlert('Error', err.message || 'Failed to save onboarding.');
     } finally {
       setLoading(false);
     }

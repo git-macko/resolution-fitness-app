@@ -9,9 +9,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, ActivityIndicator, Alert, Animated,
+  Platform, ActivityIndicator, Animated,
   Modal, Clipboard,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -357,7 +358,7 @@ export default function ChatScreen() {
   };
 
   const handleClearHistory = () => {
-    Alert.alert(
+    showAlert(
       'Clear Chat History',
       'Are you sure you want to clear your conversation with Mimi? This cannot be undone.',
       [
@@ -378,7 +379,7 @@ export default function ChatScreen() {
               setPendingPlan(null);
             } catch (err) {
               console.warn('Clear chat history failed:', err.message);
-              Alert.alert('Error', 'Failed to clear chat history. Please try again.');
+              showAlert('Error', 'Failed to clear chat history. Please try again.');
             }
           },
         },
@@ -515,7 +516,7 @@ export default function ChatScreen() {
       setPendingPlan(null);
     } catch (err) {
       console.warn('Save plan failed:', err.message);
-      Alert.alert('Error', 'Failed to save the plan. Please try again.');
+      showAlert('Error', 'Failed to save the plan. Please try again.');
     } finally {
       setSending(false);
     }

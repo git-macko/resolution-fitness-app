@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
-  StyleSheet, ActivityIndicator, Alert, Image, TextInput,
+  StyleSheet, ActivityIndicator, Image, TextInput,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
@@ -78,7 +78,7 @@ export default function AccountScreen({ navigation }) {
     const weight = parseFloat(bodyWeight) || 0;
 
     if (height <= 0 || weight <= 0) {
-      Alert.alert('Missing info', 'Enter your height and weight to recalculate your goals.');
+      showAlert('Missing info', 'Enter your height and weight to recalculate your goals.');
       return;
     }
 
@@ -97,14 +97,14 @@ export default function AccountScreen({ navigation }) {
       }
       setSettings((prev) => ({ ...(prev || {}), ...goals }));
 
-      Alert.alert(
+      showAlert(
         'Goals updated 🎯',
         `Your daily targets are now ${goals.calorieTarget || 0} kcal, ` +
           `${goals.proteinTargetGrams || 0} g protein, and ` +
           `${goals.waterGoalMl || 0} ml water. Fine-tune them anytime in Settings.`
       );
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not update body stats.');
+      showAlert('Error', err.message || 'Could not update body stats.');
     } finally {
       setSavingStats(false);
     }
@@ -113,7 +113,7 @@ export default function AccountScreen({ navigation }) {
   const handlePickPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission', 'Photo library access is needed.');
+      showAlert('Permission', 'Photo library access is needed.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -128,7 +128,7 @@ export default function AccountScreen({ navigation }) {
           updateUser({ ...user, photoUrl });
         }
       } catch (err) {
-        Alert.alert('Error', err.message || 'Failed to upload photo.');
+        showAlert('Error', err.message || 'Failed to upload photo.');
       }
     }
   };

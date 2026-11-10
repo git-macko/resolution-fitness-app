@@ -13,9 +13,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, TextInput, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform,
+  StyleSheet, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import api from '../api/client';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
@@ -159,7 +159,7 @@ export default function CreatePlanScreen({ navigation, route }) {
         setStep('days');
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to load plan. Please try again.');
+      showAlert('Error', 'Failed to load plan. Please try again.');
       navigation.goBack();
     }
   };
@@ -290,7 +290,7 @@ export default function CreatePlanScreen({ navigation, route }) {
   const advanceDayConfig = () => {
     if (daySubStep === 'muscles') {
       if (currentConfig.muscles.length === 0) {
-        Alert.alert('Select Muscles', 'Please select at least one muscle group for this day.');
+        showAlert('Select Muscles', 'Please select at least one muscle group for this day.');
         return;
       }
       setCurrentMuscleIndex(0);
@@ -298,7 +298,7 @@ export default function CreatePlanScreen({ navigation, route }) {
     } else if (daySubStep === 'exercises') {
       const exForMuscle = getDayExercises(currentDay, currentConfig.muscles[currentMuscleIndex]);
       if (exForMuscle.length < 2) {
-        Alert.alert('Need More Exercises', `Please add at least 2 exercises for ${MUSCLE_LABELS[currentMuscle] || currentMuscle}.`);
+        showAlert('Need More Exercises', `Please add at least 2 exercises for ${MUSCLE_LABELS[currentMuscle] || currentMuscle}.`);
         return;
       }
       if (currentMuscleIndex < currentConfig.muscles.length - 1) {
@@ -385,7 +385,7 @@ export default function CreatePlanScreen({ navigation, route }) {
 
   const savePlan = async () => {
     if (!planName.trim()) {
-      Alert.alert('Name Required', 'Please give your plan a name.');
+      showAlert('Name Required', 'Please give your plan a name.');
       return;
     }
 
@@ -427,13 +427,13 @@ export default function CreatePlanScreen({ navigation, route }) {
     } catch (err) {
       const msg = err.message || 'Failed to save plan.';
       if (msg.toLowerCase().includes('timed out') || msg.toLowerCase().includes('timeout')) {
-        Alert.alert(
+        showAlert(
           'Routine Likely Saved',
           'The connection timed out, but your routine may have been created. Please check your Fitness tab to verify.',
           [{ text: 'Go Back', onPress: () => navigation.goBack() }]
         );
       } else {
-        Alert.alert('Error', msg);
+        showAlert('Error', msg);
       }
     } finally {
       setSaving(false);
@@ -442,7 +442,7 @@ export default function CreatePlanScreen({ navigation, route }) {
 
   // ── Delete Plan ────────────────────────────────────────────────────
   const deletePlan = () => {
-    Alert.alert(
+    showAlert(
       'Delete Plan',
       'Are you sure you want to delete this weekly plan? This cannot be undone.',
       [
@@ -455,7 +455,7 @@ export default function CreatePlanScreen({ navigation, route }) {
               await api.deletePlan(editPlanId);
               navigation.goBack();
             } catch (err) {
-              Alert.alert('Error', err.message || 'Failed to delete plan.');
+              showAlert('Error', err.message || 'Failed to delete plan.');
             }
           },
         },
@@ -488,7 +488,7 @@ export default function CreatePlanScreen({ navigation, route }) {
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => {
           if (step === 'day-config') {
-            Alert.alert('Leave?', 'You will lose unsaved changes to this day.', [
+            showAlert('Leave?', 'You will lose unsaved changes to this day.', [
               { text: 'Stay', style: 'cancel' },
               { text: 'Leave', onPress: () => navigation.goBack() },
             ]);
@@ -1111,7 +1111,7 @@ export default function CreatePlanScreen({ navigation, route }) {
                 ]}
                 onPress={() => {
                   if (existingPlans.consistent >= MAX_CONSISTENT) {
-                    Alert.alert('Limit Reached', `You can only have up to ${MAX_CONSISTENT} routines. Delete an existing one to create a new one.`);
+                    showAlert('Limit Reached', `You can only have up to ${MAX_CONSISTENT} routines. Delete an existing one to create a new one.`);
                     return;
                   }
                   setRoutineType('consistent');
@@ -1140,7 +1140,7 @@ export default function CreatePlanScreen({ navigation, route }) {
                 ]}
                 onPress={() => {
                   if (existingPlans.oneTime >= MAX_ONE_TIME) {
-                    Alert.alert('Limit Reached', `You can only have up to ${MAX_ONE_TIME} one-time overrides. Delete or wait for one to expire.`);
+                    showAlert('Limit Reached', `You can only have up to ${MAX_ONE_TIME} one-time overrides. Delete or wait for one to expire.`);
                     return;
                   }
                   setRoutineType('one_time');

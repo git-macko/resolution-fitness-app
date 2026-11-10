@@ -10,8 +10,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, Animated,
+  ActivityIndicator, Animated,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Haptics from 'expo-haptics';
@@ -116,7 +117,7 @@ export default function BuildInspirationCard({ data, onChange }) {
   const takePhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission', 'Camera permission is needed to add inspiration photos.');
+      showAlert('Permission', 'Camera permission is needed to add inspiration photos.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -132,7 +133,7 @@ export default function BuildInspirationCard({ data, onChange }) {
   const pickFromGallery = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission', 'Photo library access is needed.');
+      showAlert('Permission', 'Photo library access is needed.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -147,7 +148,7 @@ export default function BuildInspirationCard({ data, onChange }) {
   };
 
   const choosePhotoSource = () => {
-    Alert.alert('Add Inspiration', 'Where is your inspiration photo?', [
+    showAlert('Add Inspiration', 'Where is your inspiration photo?', [
       { text: 'Take Photo', onPress: takePhoto },
       { text: 'Choose from Library', onPress: pickFromGallery },
       { text: 'Cancel', style: 'cancel' },
@@ -161,7 +162,7 @@ export default function BuildInspirationCard({ data, onChange }) {
       const photo = res.data || res;
       emit({ photos: [...photosRef.current, photo] });
     } catch (err) {
-      Alert.alert('Upload failed', err.message || 'Could not add that photo.');
+      showAlert('Upload failed', err.message || 'Could not add that photo.');
     } finally {
       setUploading(false);
     }
@@ -194,12 +195,12 @@ export default function BuildInspirationCard({ data, onChange }) {
     } catch (err) {
       // Revert on failure.
       emit({ photos: photosRef.current });
-      Alert.alert('Reorder failed', err.message || 'Please try again.');
+      showAlert('Reorder failed', err.message || 'Please try again.');
     }
   };
 
   const removePhoto = (photo) => {
-    Alert.alert('Remove photo?', 'This inspiration photo will be deleted.', [
+    showAlert('Remove photo?', 'This inspiration photo will be deleted.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -211,7 +212,7 @@ export default function BuildInspirationCard({ data, onChange }) {
               photos: photosRef.current.filter((p) => p.id !== photo.id),
             });
           } catch (err) {
-            Alert.alert('Could not remove photo', err.message || 'Please try again.');
+            showAlert('Could not remove photo', err.message || 'Please try again.');
           }
         },
       },

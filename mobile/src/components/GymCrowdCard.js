@@ -11,7 +11,8 @@
 //  - refreshingHours: boolean indicating the manual refresh request is in flight
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Pressable } from 'react-native';
+import { showAlert } from '../utils/alert';
 import Card from './Card';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
@@ -92,7 +93,7 @@ export default function GymCrowdCard({ gymCrowd, onSetupPress, onReport, reporti
   const handleOpenWebsite = () => {
     if (isHome || !gymCrowd.website) return;
     const url = gymCrowd.website?.startsWith('http') ? gymCrowd.website : `https://${gymCrowd.website}`;
-    Alert.alert(
+    showAlert(
       gymCrowd.name || 'Your Gym',
       'Open the gym website in your browser?',
       [

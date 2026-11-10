@@ -7,10 +7,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Image,
+  ScrollView, ActivityIndicator, Image,
   Modal, TextInput, Animated, Dimensions, Pressable, KeyboardAvoidingView, Platform,
   PanResponder,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import * as Haptics from 'expo-haptics';
 import api from '../api/client';
 import { useTheme } from '../contexts/ThemeContext';
@@ -239,7 +240,7 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
         }
       });
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to start workout');
+      showAlert('Error', err.message || 'Failed to start workout');
       navigation.goBack();
     }
   };
@@ -343,7 +344,7 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
   };
 
   const handleCancelSet = () => {
-    Alert.alert(
+    showAlert(
       'Discard Set Progress?',
       'Your set timer will reset and you will have to restart this set.',
       [
@@ -483,12 +484,12 @@ export default function WorkoutExecutionScreen({ navigation, route }) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to complete workout');
+      showAlert('Error', err.message || 'Failed to complete workout');
     }
   };
 
   const handleCancel = async () => {
-    Alert.alert('Cancel Workout', 'Are you sure? Progress will be lost.', [
+    showAlert('Cancel Workout', 'Are you sure? Progress will be lost.', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Yes, Cancel',

@@ -10,8 +10,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator, Switch,
+  StyleSheet, ActivityIndicator, Switch,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import AutocompleteInput from '../components/AutocompleteInput';
 import api from '../api/client';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
@@ -94,9 +95,9 @@ export default function SettingsScreen() {
         api.updateGym(gymFields),
       ]);
 
-      Alert.alert('Saved', 'Settings updated successfully.');
+      showAlert('Saved', 'Settings updated successfully.');
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to save settings.');
+      showAlert('Error', err.message || 'Failed to save settings.');
     } finally {
       setSaving(false);
     }

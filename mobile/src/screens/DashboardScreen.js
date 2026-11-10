@@ -7,8 +7,8 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity, Pressable, Animated,
-  StyleSheet, RefreshControl, ActivityIndicator, Alert,
-} from 'react-native';
+  StyleSheet, RefreshControl, ActivityIndicator, } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
@@ -125,7 +125,7 @@ export default function DashboardScreen({ navigation }) {
       await api.reportGymCrowd(level);
       await fetchDashboard();
     } catch (err) {
-      Alert.alert('Could not save report', err.message || 'Please try again.');
+      showAlert('Could not save report', err.message || 'Please try again.');
     } finally {
       setReportingCrowd(false);
     }
@@ -143,7 +143,7 @@ export default function DashboardScreen({ navigation }) {
       await api.refreshGymHours();
       await fetchDashboard();
     } catch (err) {
-      Alert.alert('Could not refresh hours', err.message || 'Please try again.');
+      showAlert('Could not refresh hours', err.message || 'Please try again.');
     } finally {
       setRefreshingHours(false);
     }

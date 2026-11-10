@@ -12,9 +12,11 @@ function format(title, message) {
 }
 
 export function showAlert(title, message, buttons) {
-  // Native: the real React Native alert.
+  // Native: the real React Native alert. Message-only alerts are called with
+  // two arguments so existing Alert.alert expectations keep their shape.
   if (Platform.OS !== 'web') {
-    Alert.alert(title, message, buttons);
+    if (buttons) Alert.alert(title, message, buttons);
+    else Alert.alert(title, message);
     return;
   }
 
@@ -30,8 +32,25 @@ export function showAlert(title, message, buttons) {
     return;
   }
 
-  // Confirmation: window.confirm() answers the first non-cancel button.
   const cancelButton = actions.find((button) => button.style === 'cancel');
+
+  // Three or more choices can't be expressed by confirm(), so offer a numbered
+  // menu — otherwise the middle options would be unreachable in the browser.
+  if (actions.length > 2) {
+    const menu = actions
+      .map((action, index) => `${index + 1}. ${action.text}`)
+      .join('\n');
+    const answer = window.prompt(`${text}\n\n${menu}`, '1');
+    const chosen = actions[Number(answer) - 1];
+    if (chosen) {
+      if (chosen.onPress) chosen.onPress();
+    } else if (cancelButton?.onPress) {
+      cancelButton.onPress();
+    }
+    return;
+  }
+
+  // Confirmation: window.confirm() answers the first non-cancel button.
   const confirmButton =
     actions.find((button) => button !== cancelButton) || actions[0];
 

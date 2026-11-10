@@ -6,8 +6,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Image, StyleSheet,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, ScrollView,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import api from '../api/client';
@@ -58,7 +59,7 @@ export default function FoodScanScreen({ route, navigation }) {
   const takePhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission', 'Camera permission is needed to scan food.');
+      showAlert('Permission', 'Camera permission is needed to scan food.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -76,7 +77,7 @@ export default function FoodScanScreen({ route, navigation }) {
   const pickFromGallery = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission', 'Photo library access is needed.');
+      showAlert('Permission', 'Photo library access is needed.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -99,7 +100,7 @@ export default function FoodScanScreen({ route, navigation }) {
       const result = data.data || data;
       setScanResult(result);
     } catch (err) {
-      Alert.alert('Scan Failed', err.message || 'Could not analyze the food. Try again.');
+      showAlert('Scan Failed', err.message || 'Could not analyze the food. Try again.');
     } finally {
       setScanning(false);
     }
@@ -113,10 +114,10 @@ export default function FoodScanScreen({ route, navigation }) {
         scanResult.id || scanResult.scanId,
         mealType
       );
-      Alert.alert('Logged!', `Food added to your ${mealType} meals.`);
+      showAlert('Logged!', `Food added to your ${mealType} meals.`);
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to log food.');
+      showAlert('Error', err.message || 'Failed to log food.');
     } finally {
       setLogging(false);
     }

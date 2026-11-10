@@ -6,8 +6,8 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
-  StyleSheet, RefreshControl, ActivityIndicator, Alert,
-} from 'react-native';
+  StyleSheet, RefreshControl, ActivityIndicator, } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../api/client';
 import HeroCard from '../components/HeroCard';
@@ -139,7 +139,7 @@ export default function FitnessScreen({ navigation }) {
             ]}
             onPress={() => {
               if (consistentPlans.length >= 2 && oneTimePlans.length >= 3) {
-                Alert.alert('Limit Reached', 'You have reached the maximum number of routines (2) and one-time overrides (3). Delete an existing one to create a new one.');
+                showAlert('Limit Reached', 'You have reached the maximum number of routines (2) and one-time overrides (3). Delete an existing one to create a new one.');
                 return;
               }
               navigation.navigate('CreatePlan');
@@ -311,7 +311,7 @@ export default function FitnessScreen({ navigation }) {
                         <TouchableOpacity
                           style={styles.planActionActivate}
                           onPress={() => {
-                            Alert.alert(
+                            showAlert(
                               'Activate Routine',
                               'Switching your active routine will RESET your progression (XP, level, streak, and volume). This cannot be undone.\n\nYour new routine will be the one you commit to from now on. Continue?',
                               [
@@ -325,7 +325,7 @@ export default function FitnessScreen({ navigation }) {
                                       setShowPlanActions(null);
                                       onRefresh();
                                     } catch (err) {
-                                      Alert.alert('Error', err.message);
+                                      showAlert('Error', err.message);
                                     }
                                   },
                                 },
@@ -350,10 +350,10 @@ export default function FitnessScreen({ navigation }) {
                         onPress={async () => {
                           try {
                             await api.clonePlan(plan.id);
-                            Alert.alert('Cloned!', 'One-time override created for next week.');
+                            showAlert('Cloned!', 'One-time override created for next week.');
                             onRefresh();
                           } catch (err) {
-                            Alert.alert('Error', err.message);
+                            showAlert('Error', err.message);
                           }
                         }}
                       >
@@ -365,7 +365,7 @@ export default function FitnessScreen({ navigation }) {
                           const deleteMsg = plan.isActive
                             ? `Delete "${plan.name}"? ⚠️ This is your ACTIVE routine. Deleting it will leave you with no active routine.`
                             : `Delete "${plan.name}"? This cannot be undone.`;
-                          Alert.alert(
+                          showAlert(
                             plan.isActive ? 'Delete Active Routine' : 'Delete Routine',
                             deleteMsg,
                             [
@@ -379,7 +379,7 @@ export default function FitnessScreen({ navigation }) {
                                     setShowPlanActions(null);
                                     onRefresh();
                                   } catch (err) {
-                                    Alert.alert('Error', err.message);
+                                    showAlert('Error', err.message);
                                   }
                                 },
                               },
@@ -510,7 +510,7 @@ export default function FitnessScreen({ navigation }) {
                           <TouchableOpacity
                             style={[styles.planActionBtn, styles.planActionDelete, { borderColor: colors.error }]}
                             onPress={() => {
-                              Alert.alert(
+                              showAlert(
                                 'Delete Routine',
                                 `Delete "${plan.name}"? This cannot be undone.`,
                                 [
@@ -524,7 +524,7 @@ export default function FitnessScreen({ navigation }) {
                                         setShowPlanActions(null);
                                         onRefresh();
                                       } catch (err) {
-                                        Alert.alert('Error', err.message);
+                                        showAlert('Error', err.message);
                                       }
                                     },
                                   },

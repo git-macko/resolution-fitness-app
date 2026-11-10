@@ -6,8 +6,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
-  StyleSheet, RefreshControl, ActivityIndicator, Alert, TextInput,
+  StyleSheet, RefreshControl, ActivityIndicator, TextInput,
 } from 'react-native';
+import { showAlert } from '../utils/alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
@@ -89,7 +90,7 @@ export default function HealthScreen({ navigation }) {
     const weight = parseFloat(bodyWeight) || 0;
 
     if (height <= 0 || weight <= 0) {
-      Alert.alert('Missing info', 'Enter your height and weight to update your goals.');
+      showAlert('Missing info', 'Enter your height and weight to update your goals.');
       return;
     }
 
@@ -105,14 +106,14 @@ export default function HealthScreen({ navigation }) {
       if (user) {
         updateUser({ ...user, heightCm: height, weightKg: weight });
       }
-      Alert.alert(
+      showAlert(
         'Goals updated 🎯',
         `Your daily targets are now ${goals.calorieTarget || 0} kcal, ` +
           `${goals.proteinTargetGrams || 0} g protein, and ${goals.waterGoalMl || 0} ml water.`
       );
       fetchData(); // refresh goal targets + totals
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not update body stats.');
+      showAlert('Error', err.message || 'Could not update body stats.');
     } finally {
       setSavingStats(false);
     }
@@ -158,7 +159,7 @@ export default function HealthScreen({ navigation }) {
     const water = parseInt(quickMeal.water, 10) || 0;
 
     if (calories <= 0 && protein <= 0 && carbs <= 0 && fat <= 0 && water <= 0) {
-      Alert.alert('Nothing to log', 'Enter calories, protein, carbs, fat, or water first.');
+      showAlert('Nothing to log', 'Enter calories, protein, carbs, fat, or water first.');
       return;
     }
 
@@ -182,7 +183,7 @@ export default function HealthScreen({ navigation }) {
       setQuickMeal({ name: '', calories: '', protein: '', carbs: '', fat: '', water: '' });
       fetchData();
     } catch (err) {
-      Alert.alert('Error', err.message || 'Failed to log.');
+      showAlert('Error', err.message || 'Failed to log.');
     }
   };
 
@@ -205,20 +206,20 @@ export default function HealthScreen({ navigation }) {
           source: 'suggestion',
         }],
       });
-      Alert.alert(
+      showAlert(
         'Added! 🍽️',
         `${suggestion.title || suggestion.name} was added to your log as a ${MEAL_TYPE_LABELS[mealType]} meal.`
       );
       fetchData();
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not add that meal.');
+      showAlert('Error', err.message || 'Could not add that meal.');
     } finally {
       setAddingSuggestion(null);
     }
   };
 
   const handleDeleteMeal = (meal) => {
-    Alert.alert(
+    showAlert(
       'Delete meal?',
       `Remove "${meal.name || 'Meal'}" from your log?`,
       [
@@ -231,7 +232,7 @@ export default function HealthScreen({ navigation }) {
               await api.deleteMeal(meal.id);
               fetchData();
             } catch (err) {
-              Alert.alert('Error', err.message || 'Failed to delete meal.');
+              showAlert('Error', err.message || 'Failed to delete meal.');
             }
           },
         },
@@ -594,7 +595,7 @@ export default function HealthScreen({ navigation }) {
                 await api.logWater(250);
                 fetchData();
               } catch (err) {
-                Alert.alert('Error', err.message || 'Failed to log water.');
+                showAlert('Error', err.message || 'Failed to log water.');
               }
             }}
           >
