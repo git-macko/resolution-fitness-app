@@ -19,6 +19,7 @@ import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Layout } from '../theme/spacing';
 import usePressScale from '../utils/usePressScale';
 import { resolveImageUrl } from '../utils/imageUrl';
+import { showAlert } from '../utils/alert';
 
 export default function AccountScreen({ navigation }) {
   const { user, updateUser, logout } = useAuth();
@@ -133,7 +134,7 @@ export default function AccountScreen({ navigation }) {
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
+    showAlert('Logout', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: logout },
     ]);

@@ -9,7 +9,9 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -34,6 +36,14 @@ func InitAuth(secret string) {
 	jwtSecret = []byte(secret)
 }
 
+// ── Sentinel Errors ──────────────────────────────────────────────────
+// errEmailExists means an account already exists for the email.
+// errUserNotFound means no account exists for the email.
+var (
+	errEmailExists  = errors.New("email already registered")
+	errUserNotFound = errors.New("user not found")
+)
+
 // ── Auth Handler Functions ───────────────────────────────────────────
 
 // Register handles POST /api/auth/register.
@@ -41,11 +51,10 @@ func InitAuth(secret string) {
 //
 // Flow:
 //  1. Validate request body (email, password)
-//  2. Check if email is already registered → 409 Conflict
-//  3. Hash the password with bcrypt (never store plain text!)
-//  4. Create user record + default settings + stats
-//  5. Generate JWT token (72h expiry)
-//  6. Return { token, user }
+//  2. Create user record + default settings + stats
+//     (duplicate email → 409 Conflict)
+//  3. Generate JWT token (72h expiry)
+//  4. Return { token, user }
 func Register(w http.ResponseWriter, r *http.Request) {
 	// ── Step 1: Parse request body ────────────────────────────────
 	var req models.RegisterRequest
@@ -64,40 +73,76 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── Step 3: Check if email already exists ─────────────────────
-	var existingID string
-	err := database.DB.QueryRow(
-		"SELECT id FROM users WHERE email = ?", req.Email,
-	).Scan(&existingID)
-	if err == nil {
-		// Email found → conflict
+	// ── Step 3: Create the account ────────────────────────────────
+	// createUser reports duplicate emails explicitly so the client can
+	// show a dedicated "email already registered" error.
+	user, err := createUser(req.Email, req.Password)
+	if errors.Is(err, errEmailExists) {
 		utils.WriteError(w, http.StatusConflict, "Email already registered")
 		return
 	}
-
-	// ── Step 4: Hash the password ─────────────────────────────────
-	// bcrypt.DefaultCost = 10 rounds (1,024 iterations).
-	// This makes brute-force attacks computationally expensive.
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to hash password")
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
 
-	// ── Step 5: Create user in database ───────────────────────────
+	// ── Step 4: Generate JWT token ────────────────────────────────
+	token, err := generateToken(user.ID)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to generate token")
+		return
+	}
+
+	// ── Step 5: Return user + token ───────────────────────────────
+	utils.WriteJSON(w, http.StatusCreated, models.AuthResponse{
+		Token: token,
+		User:  user,
+	})
+}
+
+// createUser inserts a new account plus its default settings and stats rows.
+// Returns errEmailExists when the email is already taken.
+func createUser(email, password string) (models.User, error) {
+	// ── Reject duplicate emails up front ──────────────────────────
+	var existingID string
+	err := database.DB.QueryRow(
+		"SELECT id FROM users WHERE email = ?", email,
+	).Scan(&existingID)
+	if err == nil {
+		return models.User{}, errEmailExists
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return models.User{}, err
+	}
+
+	// ── Hash the password ─────────────────────────────────────────
+	// bcrypt.DefaultCost = 10 rounds (1,024 iterations).
+	// This makes brute-force attacks computationally expensive.
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return models.User{}, err
+	}
+
 	userID := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	_, err = database.DB.Exec(`
 		INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, userID, req.Email, string(hashedPassword), req.Email, now, now)
+	`, userID, email, string(hashedPassword), email, now, now)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to create user")
-		return
+		// The UNIQUE constraint also guards against a concurrent signup:
+		// surface that as a duplicate rather than a generic failure.
+		var existingID string
+		if lookupErr := database.DB.QueryRow(
+			"SELECT id FROM users WHERE email = ?", email,
+		).Scan(&existingID); lookupErr == nil {
+			return models.User{}, errEmailExists
+		}
+		return models.User{}, err
 	}
 
-	// ── Step 6: Create default settings ───────────────────────────
+	// ── Create default settings ───────────────────────────────────
 	// Every new user gets sensible defaults for all preferences.
 	// Errors are logged (not swallowed) so a missing settings row -
 	// which would prevent the gym crowd card and other settings-driven
@@ -110,7 +155,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[auth] failed to seed default user_settings for new user %s: %v", userID, err)
 	}
 
-	// ── Step 7: Create initial stats record ───────────────────────
+	// ── Create initial stats record ───────────────────────────────
 	if _, err := database.DB.Exec(`
 		INSERT INTO user_stats (user_id, fitness_level, fitness_xp)
 		VALUES (?, 1, 0)
@@ -118,38 +163,63 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[auth] failed to seed default user_stats for new user %s: %v", userID, err)
 	}
 
-	// ── Step 8: Generate JWT token ────────────────────────────────
-	token, err := generateToken(userID)
-	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to generate token")
-		return
-	}
-
-	// ── Step 9: Return user + token ───────────────────────────────
-	user := models.User{
+	return models.User{
 		ID:                  userID,
-		Email:               req.Email,
-		DisplayName:         req.Email,
+		Email:               email,
+		DisplayName:         email,
 		FitnessLevel:        "beginner",
 		PrimaryGoal:         "general",
 		OnboardingCompleted: false,
 		CreatedAt:           now,
 		UpdatedAt:           now,
+	}, nil
+}
+
+// fetchUserByEmail loads a full user record by email.
+// Returns errUserNotFound when no account exists for the email.
+func fetchUserByEmail(email string) (models.User, error) {
+	var user models.User
+	var allergiesJSON, dietaryPrefsJSON string
+	err := database.DB.QueryRow(`
+		SELECT id, email, password_hash, display_name, phone_number,
+		       date_of_birth, gender, height_cm, fitness_level, primary_goal,
+		       allergies, dietary_prefs, photo_url,
+		       CASE WHEN onboarding_completed THEN 1 ELSE 0 END,
+		       created_at, updated_at
+		FROM users WHERE email = ?
+	`, email).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.PhoneNumber,
+		&user.DateOfBirth, &user.Gender, &user.HeightCm, &user.FitnessLevel, &user.PrimaryGoal,
+		&allergiesJSON, &dietaryPrefsJSON, &user.PhotoURL,
+		&user.OnboardingCompleted,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.User{}, errUserNotFound
+	}
+	if err != nil {
+		return models.User{}, err
 	}
 
-	utils.WriteJSON(w, http.StatusCreated, models.AuthResponse{
-		Token: token,
-		User:  user,
-	})
+	// ── Parse JSON arrays from TEXT columns ───────────────────────
+	json.Unmarshal([]byte(allergiesJSON), &user.Allergies)
+	json.Unmarshal([]byte(dietaryPrefsJSON), &user.DietaryPrefs)
+
+	return user, nil
 }
 
 // Login handles POST /api/auth/login.
 // It authenticates a user with email and password.
 //
+// If the email has no account yet, the account is created automatically
+// with the submitted credentials so first-time users land straight in
+// the app instead of hitting "invalid credentials".
+//
 // Flow:
 //  1. Validate request body
 //  2. Look up user by email
-//  3. Compare password hash with bcrypt
+//  3. Existing account → compare password hash with bcrypt
+//     Missing account → validate + create the account (auto-registration)
 //  4. Generate JWT token (72h expiry)
 //  5. Return { token, user }
 func Login(w http.ResponseWriter, r *http.Request) {
@@ -167,37 +237,45 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Step 3: Find user by email ────────────────────────────────
-	var user models.User
-	var allergiesJSON, dietaryPrefsJSON string
-	err := database.DB.QueryRow(`
-		SELECT id, email, password_hash, display_name, phone_number,
-		       date_of_birth, gender, height_cm, fitness_level, primary_goal,
-		       allergies, dietary_prefs, photo_url,
-		       CASE WHEN onboarding_completed THEN 1 ELSE 0 END,
-		       created_at, updated_at
-		FROM users WHERE email = ?
-	`, req.Email).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.PhoneNumber,
-		&user.DateOfBirth, &user.Gender, &user.HeightCm, &user.FitnessLevel, &user.PrimaryGoal,
-		&allergiesJSON, &dietaryPrefsJSON, &user.PhotoURL,
-		&user.OnboardingCompleted,
-		&user.CreatedAt, &user.UpdatedAt,
-	)
-	if err != nil {
-		// Don't reveal whether the email exists or not — same error for both cases.
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid email or password")
+	user, err := fetchUserByEmail(req.Email)
+	switch {
+	case err == nil:
+		// ── Existing account → verify password ────────────────────
+		if !VerifyPassword(user.PasswordHash, req.Password) {
+			utils.WriteError(w, http.StatusUnauthorized, "Invalid email or password")
+			return
+		}
+
+	case errors.Is(err, errUserNotFound):
+		// ── Step 4: First login for this email → auto-register ─────
+		// Validate first so a typo'd password doesn't create a weak account.
+		if errMsg := utils.ValidateEmail(req.Email); errMsg != "" {
+			utils.WriteError(w, http.StatusBadRequest, errMsg)
+			return
+		}
+		if errMsg := utils.ValidatePassword(req.Password); errMsg != "" {
+			utils.WriteError(w, http.StatusBadRequest, errMsg)
+			return
+		}
+
+		user, err = createUser(req.Email, req.Password)
+		if errors.Is(err, errEmailExists) {
+			// Created concurrently between the lookup and the insert —
+			// load it and verify this request's password instead.
+			user, err = fetchUserByEmail(req.Email)
+			if err != nil || !VerifyPassword(user.PasswordHash, req.Password) {
+				utils.WriteError(w, http.StatusUnauthorized, "Invalid email or password")
+				return
+			}
+		} else if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, "Failed to create user")
+			return
+		}
+
+	default:
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to load user")
 		return
 	}
-
-	// ── Step 4: Verify password ───────────────────────────────────
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid email or password")
-		return
-	}
-
-	// ── Parse JSON arrays from TEXT columns ───────────────────────
-	json.Unmarshal([]byte(allergiesJSON), &user.Allergies)
-	json.Unmarshal([]byte(dietaryPrefsJSON), &user.DietaryPrefs)
 
 	// ── Step 5: Generate JWT token ────────────────────────────────
 	token, err := generateToken(user.ID)

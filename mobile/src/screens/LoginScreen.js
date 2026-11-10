@@ -7,13 +7,14 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius } from '../theme/spacing';
 import Logo from '../components/Logo';
+import { showAlert } from '../utils/alert';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -26,7 +27,7 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Required', 'Please enter both email and password.');
+      showAlert('Required', 'Please enter both email and password.');
       return;
     }
 
@@ -34,7 +35,7 @@ export default function LoginScreen({ navigation }) {
     try {
       await login(email.trim().toLowerCase(), password);
     } catch (err) {
-      Alert.alert('Login Failed', err.message || 'Please check your credentials.');
+      showAlert('Login Failed', err.message || 'Please check your credentials.');
     } finally {
       setLoading(false);
     }

@@ -134,12 +134,20 @@ class ApiClient {
           try { data = JSON.parse(trimmed); } catch { data = null; }
         }
         if (!data) {
-          throw new Error(response.ok ? 'Unexpected response format' : `Request failed (${response.status})`);
+          const error = new Error(
+            response.ok ? 'Unexpected response format' : `Request failed (${response.status})`
+          );
+          error.status = response.status;
+          throw error;
         }
       }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong');
+        const error = new Error(data.error || 'Something went wrong');
+        // Attach the HTTP status so screens can react to specific cases
+        // (e.g. 409 Conflict → email already registered).
+        error.status = response.status;
+        throw error;
       }
 
       // Cache successful GET responses
@@ -166,6 +174,7 @@ class ApiClient {
       body: JSON.stringify({ email, password }),
     });
     await this.setToken(data.token);
+    cache.clear(); // Drop anything cached for a previous session
     return data;
   }
 

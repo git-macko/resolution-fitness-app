@@ -6,12 +6,13 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius } from '../theme/spacing';
+import { showAlert } from '../utils/alert';
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
@@ -25,15 +26,15 @@ export default function RegisterScreen({ navigation }) {
 
   const handleRegister = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Required', 'Please enter email and password.');
+      showAlert('Required', 'Please enter email and password.');
       return;
     }
     if (password.length < 8) {
-      Alert.alert('Password', 'Password must be at least 8 characters.');
+      showAlert('Password', 'Password must be at least 8 characters.');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Mismatch', 'Passwords do not match.');
+      showAlert('Mismatch', 'Passwords do not match.');
       return;
     }
 
@@ -45,7 +46,19 @@ export default function RegisterScreen({ navigation }) {
         routes: [{ name: 'Onboarding' }],
       });
     } catch (err) {
-      Alert.alert('Registration Failed', err.message || 'Please try again.');
+      if (err.status === 409) {
+        // Backend rejects a duplicate email with 409 Conflict.
+        showAlert(
+          'Email Already Registered',
+          'An account with this email already exists. Please sign in instead.',
+          [
+            { text: 'Try Again', style: 'cancel' },
+            { text: 'Sign In', onPress: () => navigation.navigate('Login') },
+          ]
+        );
+      } else {
+        showAlert('Registration Failed', err.message || 'Please try again.');
+      }
     } finally {
       setLoading(false);
     }
