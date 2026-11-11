@@ -40,6 +40,7 @@ func main() {
 	handlers.InitAuth(cfg.JWTSecret)
 	handlers.InitGeminiKey(cfg.GeminiKey)
 	handlers.InitGeminiModel(cfg.GeminiModel)
+	handlers.InitAIDailyLimit(cfg.AIDailyLimit)
 	handlers.InitGooglePlacesKey(cfg.GooglePlacesAPIKey)
 	handlers.InitOverpassAPIURL(cfg.OverpassAPIURL)
 	middleware.InitMiddleware(cfg.JWTSecret)
@@ -162,6 +163,11 @@ func main() {
 	// --- Quotes & Facts (protected) ---
 	mux.Handle("GET /api/quotes", protect(handlers.GetRandomQuote))
 	mux.Handle("GET /api/facts", protect(handlers.GetRandomFact))
+
+	// --- AI usage (protected) ---
+	// Read-only allowance snapshot shown on every AI screen. The chat,
+	// plan and food-scan routes below each spend one request.
+	mux.Handle("GET /api/ai/usage", protect(handlers.GetAIUsage))
 
 	// --- AI Chat routes (protected) ---
 	// Chat and plan generation call Gemini (paid), so they get the AI rate limit.

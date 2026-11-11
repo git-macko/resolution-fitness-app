@@ -82,6 +82,12 @@ type Config struct {
 	// upstream APIs, protecting against runaway Gemini usage.
 	// 0 falls back to RateLimitPerMinute.
 	AIRateLimitPerMinute int
+
+	// AIDailyLimit is the per-user daily allowance of AI requests (chat,
+	// plan generation, food scans). The app shows the remaining allowance
+	// on every AI screen and rejects requests past the limit.
+	// Defaults to 20 when unset; 0 also means the default.
+	AIDailyLimit int
 }
 
 // Load reads configuration from environment variables.
@@ -184,6 +190,12 @@ func Load() *Config {
 	authRateLimitPerMinute := envInt("AUTH_RATE_LIMIT_PER_MINUTE", 0)
 	aiRateLimitPerMinute := envInt("AI_RATE_LIMIT_PER_MINUTE", 0)
 
+	// ── Daily AI allowance (per user) ─────────────────────────────
+	// Chat, plan generation and food scans each spend one request.
+	// The app displays the remaining allowance and stops at the limit.
+	//   AI_DAILY_LIMIT=20
+	aiDailyLimit := envInt("AI_DAILY_LIMIT", 20)
+
 	cfg := &Config{
 		AppEnv:             appEnv,
 		Port:               port,
@@ -199,6 +211,7 @@ func Load() *Config {
 		RateLimitPerMinute:     rateLimitPerMinute,
 		AuthRateLimitPerMinute: authRateLimitPerMinute,
 		AIRateLimitPerMinute:   aiRateLimitPerMinute,
+		AIDailyLimit:           aiDailyLimit,
 	}
 	if err := cfg.validate(); err != nil {
 		log.Fatalf("FATAL: %v", err)

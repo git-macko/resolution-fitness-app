@@ -43,6 +43,9 @@ services:
         value: "10"
       - key: AI_RATE_LIMIT_PER_MINUTE
         value: "20"
+      # Daily AI allowance per user (chat, plan generation, food scans).
+      - key: AI_DAILY_LIMIT
+        value: "20"
       # ── AI keys — paste your real values in the Render dashboard ─
       # after the first deploy (Settings → Environment).
       - key: GEMINI_API_KEY

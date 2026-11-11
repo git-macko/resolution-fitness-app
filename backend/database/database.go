@@ -598,6 +598,21 @@ func runMigrations() error {
 		return fmt.Errorf("failed to create chat_messages table: %w", err)
 	}
 
+	// ── Daily AI Usage table ─────────────────────────────────────
+	// One row per user per day, so the app can show how much of the
+	// daily AI allowance is left and refuse requests past the limit.
+	if _, err := DB.Exec(`
+		CREATE TABLE IF NOT EXISTS ai_usage_daily (
+			user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			day         TEXT NOT NULL,
+			used        INTEGER NOT NULL DEFAULT 0,
+			updated_at  TEXT DEFAULT (datetime('now')),
+			PRIMARY KEY (user_id, day)
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create ai_usage_daily table: %w", err)
+	}
+
 	// ── Gym Crowd Reports table ──────────────────────────────────
 	// Stores user-reported crowd levels for gyms so the app can show
 	// community-powered occupancy estimates alongside BestTime/simulated data.

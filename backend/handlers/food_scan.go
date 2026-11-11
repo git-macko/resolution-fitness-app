@@ -207,6 +207,13 @@ func analyzeFoodWithGemini(imageBytes []byte, mimeType string, ctx userFoodConte
 func ScanFood(w http.ResponseWriter, r *http.Request) {
 	userID := GetUserID(r)
 
+	// ── Enforce today's AI allowance ──────────────────────────────
+	// Checked before the upload is read, so an exhausted user doesn't pay
+	// for a photo upload that can't be analyzed anyway.
+	if !checkAIUsage(w, userID) {
+		return
+	}
+
 	// ── Limit upload size ─────────────────────────────────────────
 	r.Body = http.MaxBytesReader(w, r.Body, utils.MaxUploadSize)
 
@@ -258,6 +265,11 @@ func ScanFood(w http.ResponseWriter, r *http.Request) {
 		Allergies:   userAllergies,
 		DietType:    strings.Join(dietaryPrefs, ", "),
 	}
+
+	// ── Spend one request from today's allowance ───────────────────
+	// Recorded before the paid analysis call, so a failed upstream
+	// request still counts the AI work it attempted.
+	recordAIUsage(userID)
 
 	// ── Analyze the food ──────────────────────────────────────────
 	// Primary provider: Google Gemini. Falls back to simulated analysis

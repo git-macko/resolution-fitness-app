@@ -51,6 +51,15 @@ func chatCore(w http.ResponseWriter, r *http.Request, stream bool) {
 		return
 	}
 
+	// ── Enforce today's AI allowance ──────────────────────────────
+	// Checked before anything is saved, so a rejected message doesn't
+	// appear in history. The request is counted before the call so a
+	// failed upstream attempt still spends the allowance it used.
+	if !checkAIUsage(w, userID) {
+		return
+	}
+	recordAIUsage(userID)
+
 	// ── Build personalized system prompt ──────────────────────────
 	systemPrompt := buildSystemPrompt(userID)
 
@@ -257,6 +266,13 @@ func ChatPlan(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusBadRequest, "Message is required")
 		return
 	}
+
+	// ── Enforce today's AI allowance ──────────────────────────────
+	// Plan generation is a separate AI request from a chat reply.
+	if !checkAIUsage(w, userID) {
+		return
+	}
+	recordAIUsage(userID)
 
 	// Normalize routine type.
 	routineType := req.RoutineType
