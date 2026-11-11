@@ -1,0 +1,26 @@
+name: Keep backend awake
+
+# The backend runs on Render's free tier, which sleeps an instance after
+# ~15 minutes without traffic. Pinging the health endpoint on a schedule
+# keeps it warm so the live demo answers immediately. The app itself also
+# wakes a sleeping server (see mobile/src/api/client.js), so this is a
+# best-effort extra: GitHub's scheduled runs can be delayed under load.
+#
+# Note: 24/7 uptime is ~744 h/month against Render's 750 h free allowance.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping health endpoint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the instance
+        run: |
+          curl -fsS \
+            --retry 4 --retry-all-errors --retry-delay 15 \
+            --max-time 120 \
+            https://resolution-backend.onrender.com/api/health
