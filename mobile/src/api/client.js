@@ -33,6 +33,21 @@ const WAKE_RETRY_DELAY_MS = 3_000;
 let lastSuccessAt = 0;
 // Shared in-flight warm-up, so parallel requests wait on one health poll.
 let wakingUp = null;
+// Warm-up state is shared with the UI so a cold start can explain itself.
+let isWarming = false;
+const warmUpListeners = new Set();
+
+function setWarming(next) {
+  if (isWarming === next) return;
+  isWarming = next;
+  for (const listener of warmUpListeners) {
+    try {
+      listener(isWarming);
+    } catch {
+      // A broken listener must never break a request.
+    }
+  }
+}
 
 function getCacheKey(endpoint, options) {
   // Only cache GET requests
@@ -99,13 +114,27 @@ class ApiClient {
 
   // ── Cold-start Warm-up ─────────────────────────────────────────────
 
+  // Whether the client is currently waiting for a sleeping server to boot.
+  isWarmingUp() {
+    return isWarming;
+  }
+
+  // Subscribes to warm-up state changes (for the "waking up" notice).
+  // Returns an unsubscribe function.
+  subscribeWarmUp(listener) {
+    warmUpListeners.add(listener);
+    return () => warmUpListeners.delete(listener);
+  }
+
   // Waits for a sleeping instance to boot when the API has been idle.
   // Never throws: the caller's own request reports any real failure.
   async warmUpIfIdle() {
     if (Date.now() - lastSuccessAt < IDLE_BEFORE_WAKE_MS) return;
     if (!wakingUp) {
+      setWarming(true);
       wakingUp = this.waitForServer().finally(() => {
         wakingUp = null;
+        setWarming(false);
       });
     }
     try {

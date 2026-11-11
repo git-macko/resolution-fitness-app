@@ -11,6 +11,7 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashAnimation from './src/components/SplashAnimation';
+import ServerWakeNotice from './src/components/ServerWakeNotice';
 import MobileFrame from './src/components/MobileFrame';
 
 // Keep the native splash visible until our JS-driven animation takes over.
@@ -48,6 +49,7 @@ export default function App() {
           <MobileFrame>
             <ThemedStatusBar />
             <AppNavigator />
+            <ServerWakeNotice />
             {!splashDone && (
               <SplashAnimation isReady onFadeComplete={handleSplashComplete} />
             )}
