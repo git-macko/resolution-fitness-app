@@ -17,6 +17,23 @@ const TOKEN_KEY = 'auth_token';
 const cache = new Map();
 const CACHE_TTL_MS = 30_000; // 30 seconds
 
+// ── Cold-start warm-up ───────────────────────────────────────────────
+// The backend runs on Render's free tier, which sleeps the instance after
+// ~15 minutes without traffic; the next request waits 30-60 s for it to
+// boot. That is longer than the per-request timeout below, so the first
+// request after any idle period used to fail every time. When the API has
+// been quiet we ping /api/health first (with a generous budget) and only
+// then send the real, normally-timed request.
+const IDLE_BEFORE_WAKE_MS = 5 * 60 * 1000;
+const WAKE_TIMEOUT_MS = 60_000;
+const WAKE_ATTEMPT_TIMEOUT_MS = 10_000;
+const WAKE_RETRY_DELAY_MS = 3_000;
+
+// Last time the API answered successfully (0 = nothing yet this session).
+let lastSuccessAt = 0;
+// Shared in-flight warm-up, so parallel requests wait on one health poll.
+let wakingUp = null;
+
 function getCacheKey(endpoint, options) {
   // Only cache GET requests
   if (options.method && options.method !== 'GET') return null;
@@ -80,6 +97,54 @@ class ApiClient {
     }
   }
 
+  // ── Cold-start Warm-up ─────────────────────────────────────────────
+
+  // Waits for a sleeping instance to boot when the API has been idle.
+  // Never throws: the caller's own request reports any real failure.
+  async warmUpIfIdle() {
+    if (Date.now() - lastSuccessAt < IDLE_BEFORE_WAKE_MS) return;
+    if (!wakingUp) {
+      wakingUp = this.waitForServer().finally(() => {
+        wakingUp = null;
+      });
+    }
+    try {
+      await wakingUp;
+    } catch {
+      // Still booting or offline — let the request below surface the error.
+    }
+  }
+
+  // Polls /api/health until the instance answers, so a sleeping service gets
+  // its full boot budget before the real request is sent.
+  async waitForServer() {
+    const deadline = Date.now() + WAKE_TIMEOUT_MS;
+    for (;;) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), WAKE_ATTEMPT_TIMEOUT_MS);
+      try {
+        const response = await fetch(`${BASE_URL}/api/health`, {
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          lastSuccessAt = Date.now();
+          return;
+        }
+      } catch (err) {
+        // A real network failure (offline, DNS, connection refused) won't fix
+        // itself by waiting, so give up immediately and let the request fail
+        // fast. Only a timeout means the instance is still booting.
+        if (err?.name !== 'AbortError') throw err;
+      } finally {
+        clearTimeout(timer);
+      }
+      if (Date.now() + WAKE_RETRY_DELAY_MS >= deadline) {
+        throw new Error('Server did not respond in time');
+      }
+      await new Promise((resolve) => setTimeout(resolve, WAKE_RETRY_DELAY_MS));
+    }
+  }
+
   // ── Core Request Method ────────────────────────────────────────
 
   async request(endpoint, options = {}) {
@@ -111,6 +176,9 @@ class ApiClient {
         return cached;
       }
     }
+
+    // ── Wake a sleeping instance before the timed request ──────
+    await this.warmUpIfIdle();
 
     // ── 15-second timeout to prevent infinite loading ──────────
     // Longer-lived calls (e.g. AI image generation) can pass options.timeout.
@@ -149,6 +217,9 @@ class ApiClient {
         error.status = response.status;
         throw error;
       }
+
+      // Any successful (2xx) response proves the API is awake.
+      lastSuccessAt = Date.now();
 
       // Cache successful GET responses
       if (cacheKey && !options.skipCache) {
@@ -673,6 +744,8 @@ class ApiClient {
   // when the stream finishes. onError(error) is called if the request fails.
   async sendChatMessageStream(message, onChunk, onDone, onError) {
     const token = await this.getToken();
+    // The streaming XHR has its own 60 s timeout; wake the server first.
+    await this.warmUpIfIdle();
 
     const xhr = new XMLHttpRequest();
     let rawBuffer = '';
