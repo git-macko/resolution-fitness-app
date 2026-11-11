@@ -16,6 +16,7 @@ import { BASE_URL } from '../api/config';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows } from '../theme/spacing';
+import AIUsageNotice from '../components/AIUsageNotice';
 
 export default function FoodScanScreen({ route, navigation }) {
   const { colors } = useTheme();
@@ -130,6 +131,8 @@ export default function FoodScanScreen({ route, navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <AIUsageNotice style={{ marginBottom: Spacing.md }} />
+
       {/* ── Image Area ──────────────────────────────────────── */}
       {imageUri ? (
         <View style={styles.imageContainer}>

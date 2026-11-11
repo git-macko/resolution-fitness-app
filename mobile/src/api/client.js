@@ -49,6 +49,25 @@ function setWarming(next) {
   }
 }
 
+// ── Daily AI usage ───────────────────────────────────────────────────
+// The backend gives each user a daily allowance of AI requests (chat,
+// plan generation, food scans). The UI subscribes to this state so every
+// AI screen can show the limit and how much of it is left today.
+let aiUsage = null;
+let aiUsageRequest = null;
+const aiUsageListeners = new Set();
+
+function publishAIUsage(next) {
+  aiUsage = next;
+  for (const listener of aiUsageListeners) {
+    try {
+      listener(aiUsage);
+    } catch {
+      // A broken listener must never break an AI request.
+    }
+  }
+}
+
 function getCacheKey(endpoint, options) {
   // Only cache GET requests
   if (options.method && options.method !== 'GET') return null;
@@ -124,6 +143,36 @@ class ApiClient {
   subscribeWarmUp(listener) {
     warmUpListeners.add(listener);
     return () => warmUpListeners.delete(listener);
+  }
+
+  // ── Daily AI usage ─────────────────────────────────────────────
+
+  // Last known allowance (null until the first fetch succeeds).
+  getAIUsageSnapshot() {
+    return aiUsage;
+  }
+
+  // Subscribes to allowance changes (for the usage notice).
+  // Returns an unsubscribe function.
+  subscribeAIUsage(listener) {
+    aiUsageListeners.add(listener);
+    return () => aiUsageListeners.delete(listener);
+  }
+
+  // Fetches today's allowance. Failures are swallowed: the notice keeps
+  // showing the last known numbers instead of inventing new ones.
+  refreshAIUsage() {
+    if (aiUsageRequest) return aiUsageRequest;
+    aiUsageRequest = this.request('/api/ai/usage', { skipCache: true })
+      .then((res) => {
+        if (res && res.data) publishAIUsage(res.data);
+        return aiUsage;
+      })
+      .catch(() => aiUsage)
+      .finally(() => {
+        aiUsageRequest = null;
+      });
+    return aiUsageRequest;
   }
 
   // Waits for a sleeping instance to boot when the API has been idle.
@@ -275,6 +324,7 @@ class ApiClient {
     });
     await this.setToken(data.token);
     cache.clear(); // Drop anything cached for a previous session
+    publishAIUsage(null); // A new session starts with its own allowance
     return data;
   }
 
@@ -285,6 +335,7 @@ class ApiClient {
     });
     await this.setToken(data.token);
     cache.clear(); // Ensure no stale data from a previous session bleeds in
+    publishAIUsage(null); // A new session starts with its own allowance
     return data;
   }
 
@@ -294,6 +345,7 @@ class ApiClient {
 
   async logout() {
     cache.clear(); // Clear all cached responses so stale data doesn't persist across sessions
+    publishAIUsage(null);
     await this.removeToken();
   }
 
@@ -665,10 +717,12 @@ class ApiClient {
       type,
     });
 
-    return this.request('/api/food-scan', {
+    const result = await this.request('/api/food-scan', {
       method: 'POST',
       body: formData,
     });
+    this.refreshAIUsage();
+    return result;
   }
 
   async logScannedFood(scanId, mealType) {
@@ -754,18 +808,22 @@ class ApiClient {
   // ── AI Chat ────────────────────────────────────────────────────
 
   async sendChatMessage(message) {
-    return this.request('/api/chat', {
+    const result = await this.request('/api/chat', {
       method: 'POST',
       body: JSON.stringify({ message }),
     });
+    this.refreshAIUsage();
+    return result;
   }
 
   async createChatPlan(message, routineType) {
     invalidateCache('/api/plans');
-    return this.request('/api/chat/plan', {
+    const result = await this.request('/api/chat/plan', {
       method: 'POST',
       body: JSON.stringify({ message, routineType }),
     });
+    this.refreshAIUsage();
+    return result;
   }
 
   // Streams a chat message from POST /api/chat/stream.
@@ -833,11 +891,24 @@ class ApiClient {
 
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        onError(new Error(`Request failed with status ${xhr.status}`));
+        // Surface the server's message (e.g. "You've used all 20 AI
+        // requests for today") instead of a bare status code.
+        let message = `Request failed with status ${xhr.status}`;
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (body && body.error) message = body.error;
+        } catch {
+          // Non-JSON error body — keep the status message.
+        }
+        const error = new Error(message);
+        error.status = xhr.status;
+        this.refreshAIUsage();
+        onError(error);
         return;
       }
       // Parse any remaining buffered data.
       parseEvents('');
+      this.refreshAIUsage();
       onDone(fullText);
     };
 

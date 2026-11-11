@@ -22,6 +22,7 @@ import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
 import { Spacing, BorderRadius, Shadows } from '../theme/spacing';
 import MimiMark from '../components/MimiMark';
+import AIUsageNotice from '../components/AIUsageNotice';
 
 const WELCOME_MESSAGE = "Hey there! 💪 I'm your AI fitness coach. Ask me anything — workout tips, nutrition advice, form checks, or motivation. What can I help with today?";
 const WELCOME_MESSAGE_OBJ = {
@@ -437,7 +438,11 @@ export default function ChatScreen() {
           setMessages((prev) => [...prev, {
             id: nextId(),
             role: 'assistant',
-            content: 'Sorry, I had trouble connecting. Please try again.',
+            // A 429 carries the daily-limit message from the server, which
+            // is more useful than the generic connection apology.
+            content: err.status === 429
+              ? err.message
+              : 'Sorry, I had trouble connecting. Please try again.',
             error: true,
           }]);
           setSending(false);
@@ -516,7 +521,9 @@ export default function ChatScreen() {
       setPendingPlan(null);
     } catch (err) {
       console.warn('Save plan failed:', err.message);
-      showAlert('Error', 'Failed to save the plan. Please try again.');
+      showAlert('Error', err.status === 429
+        ? err.message
+        : 'Failed to save the plan. Please try again.');
     } finally {
       setSending(false);
     }
@@ -582,6 +589,8 @@ export default function ChatScreen() {
           )}
         </View>
       </View>
+
+      <AIUsageNotice style={{ marginHorizontal: Spacing.md, marginTop: Spacing.sm }} />
 
       <KeyboardAvoidingView
         style={styles.scrollInput}

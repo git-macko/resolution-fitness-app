@@ -158,3 +158,45 @@ describe('API client warm-up', () => {
     );
   });
 });
+
+describe('AI usage allowance', () => {
+  it('publishes the allowance fetched from /api/ai/usage', async () => {
+    global.fetch = jest.fn(async (url) => {
+      if (String(url).includes('/api/ai/usage')) {
+        return jsonResponse({ data: { used: 4, limit: 20, remaining: 16 } });
+      }
+      return jsonResponse({ ok: true });
+    });
+
+    const api = loadClient();
+    const seen = [];
+    const unsubscribe = api.subscribeAIUsage((usage) => seen.push(usage));
+
+    const usage = await api.refreshAIUsage();
+    unsubscribe();
+
+    const expected = { used: 4, limit: 20, remaining: 16 };
+    expect(usage).toEqual(expected);
+    expect(api.getAIUsageSnapshot()).toEqual(expected);
+    expect(seen[seen.length - 1]).toEqual(expected);
+  });
+
+  it('refreshes the allowance after an AI request spends one', async () => {
+    const calls = [];
+    global.fetch = jest.fn(async (url) => {
+      calls.push(String(url));
+      if (String(url).includes('/api/ai/usage')) {
+        return jsonResponse({ data: { used: 1, limit: 20, remaining: 19 } });
+      }
+      return jsonResponse({ data: { reply: 'hi' } });
+    });
+
+    const api = loadClient();
+    await api.sendChatMessage('hello');
+    // The refresh is fire-and-forget; let it settle before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls.some((url) => url.includes('/api/ai/usage'))).toBe(true);
+    expect(api.getAIUsageSnapshot()).toEqual({ used: 1, limit: 20, remaining: 19 });
+  });
+});
