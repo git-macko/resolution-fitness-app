@@ -7,9 +7,84 @@
 // backend URL for physical device testing.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { BASE_URL } from './config';
 
 const TOKEN_KEY = 'auth_token';
+
+// ── Image uploads ────────────────────────────────────────────────────
+// React Native's FormData understands a { uri, name, type } descriptor and
+// streams the file from disk. The browser's FormData (Expo web) does not —
+// it stringifies the object, so the server receives a text field with no
+// file and rejects the upload (e.g. "No food photo provided"). On web we
+// therefore read the picked image into a Blob and append that instead.
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'];
+const IMAGE_MIME_BY_EXT = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  heic: 'image/heic',
+  heif: 'image/heic',
+};
+
+// Returns the file name embedded in the URI when it ends in a known image
+// extension. Data URIs and blob URLs have none, so callers supply a fallback.
+function imageFileNameFromUri(uri) {
+  const path = String(uri || '').split(/[?#]/)[0];
+  const lastSegment = path.split('/').pop() || '';
+  const ext = lastSegment.includes('.') ? lastSegment.split('.').pop().toLowerCase() : '';
+  return IMAGE_EXTENSIONS.includes(ext) ? lastSegment : '';
+}
+
+function imageMimeType(uri, fileName) {
+  const dataUri = /^data:([^;,]+)/i.exec(String(uri || ''));
+  if (dataUri && dataUri[1].toLowerCase().startsWith('image/')) {
+    return dataUri[1].toLowerCase();
+  }
+  const ext = String(fileName || '').split('.').pop().toLowerCase();
+  return IMAGE_MIME_BY_EXT[ext] || 'image/jpeg';
+}
+
+function extensionForMimeType(mimeType) {
+  const subType = String(mimeType || '').split('/')[1] || '';
+  return subType === 'jpeg' ? 'jpg' : (subType || 'jpg');
+}
+
+// Appends a picked image to a multipart body as an actual file part on both
+// native and web.
+async function appendImageFile(formData, field, uri, fallbackBaseName = 'photo') {
+  let fileName = imageFileNameFromUri(uri);
+
+  // data:/blob: URIs only exist in a browser, where FormData needs a Blob.
+  const isBrowserImage = /^(data|blob):/i.test(String(uri || ''));
+
+  if (Platform.OS !== 'web' && !isBrowserImage) {
+    fileName = fileName || `${fallbackBaseName}.jpg`;
+    formData.append(field, {
+      uri,
+      name: fileName,
+      type: imageMimeType(uri, fileName),
+    });
+    return;
+  }
+
+  let blob;
+  try {
+    const response = await fetch(uri);
+    blob = await response.blob();
+  } catch (err) {
+    console.warn(`Failed to read ${field} image:`, err.message);
+    throw new Error('Could not read the selected photo. Please try again.');
+  }
+
+  const mimeType = blob.type && blob.type.startsWith('image/')
+    ? blob.type
+    : imageMimeType(uri, fileName);
+  fileName = fileName || `${fallbackBaseName}.${extensionForMimeType(mimeType)}`;
+  formData.append(field, blob, fileName);
+}
 
 // ── Simple in-memory cache with TTL ─────────────────────────────
 // Caches GET responses so frequent screen re-mounts don't
@@ -364,15 +439,7 @@ class ApiClient {
 
   async uploadProfilePicture(imageUri) {
     const formData = new FormData();
-    const filename = imageUri.split('/').pop();
-    const match = /\.(\w+)$/.exec(filename || '');
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-    formData.append('profilePic', {
-      uri: imageUri,
-      name: filename || 'photo.jpg',
-      type,
-    });
+    await appendImageFile(formData, 'profilePic', imageUri, 'photo');
 
     return this.request('/api/profile/picture', {
       method: 'POST',
@@ -670,15 +737,7 @@ class ApiClient {
     invalidateCache('/api/dashboard');
     invalidateCache('/api/inspiration');
     const formData = new FormData();
-    const filename = imageUri.split('/').pop();
-    const match = /\.(\w+)$/.exec(filename || '');
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-    formData.append('photo', {
-      uri: imageUri,
-      name: filename || 'photo.jpg',
-      type,
-    });
+    await appendImageFile(formData, 'photo', imageUri, 'photo');
 
     return this.request('/api/inspiration/photos', {
       method: 'POST',
@@ -707,19 +766,17 @@ class ApiClient {
 
   async scanFood(imageUri) {
     const formData = new FormData();
-    const filename = imageUri.split('/').pop();
-    const match = /\.(\w+)$/.exec(filename || '');
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
+    await appendImageFile(formData, 'foodPhoto', imageUri, 'food');
 
-    formData.append('foodPhoto', {
-      uri: imageUri,
-      name: filename || 'food.jpg',
-      type,
-    });
-
+    // A food scan uploads the photo and waits for Gemini's vision analysis,
+    // which routinely takes longer than the default 15 s budget (measured
+    // 13-25 s per photo). With that default the browser aborted first and the
+    // screen showed "Request timed out". Stay above the backend's own 60 s
+    // budget for the upstream call so the server, not the browser, decides.
     const result = await this.request('/api/food-scan', {
       method: 'POST',
       body: formData,
+      timeout: 90000,
     });
     this.refreshAIUsage();
     return result;

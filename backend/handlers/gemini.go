@@ -47,6 +47,12 @@ const geminiChatTimeout = 30 * time.Second
 // geminiStreamTimeout is the maximum time to wait for a streaming reply.
 const geminiStreamTimeout = 60 * time.Second
 
+// geminiFoodScanTimeout is the budget for a vision food analysis. Analyzing a
+// photo takes much longer than a text reply — measured 13-25 s for a resized
+// phone photo — so the chat budget is too tight here; exceeding it silently
+// dropped the request into the simulated (fake) analysis fallback.
+const geminiFoodScanTimeout = 60 * time.Second
+
 // InitGeminiKey sets the global Gemini API key.
 // Called from main.go during startup with the server-level GEMINI_API_KEY.
 func InitGeminiKey(key string) {
@@ -74,6 +80,12 @@ func GeminiModel() string {
 // given model and returns the parsed response. Returns an non-nil error on any
 // network, HTTP, or parsing failure.
 func callGemini(model string, reqBody geminiGenerateRequest) (*geminiGenerateResponse, error) {
+	return callGeminiWithTimeout(model, reqBody, geminiChatTimeout)
+}
+
+// callGeminiWithTimeout is callGemini with an explicit per-request budget,
+// for callers whose prompts legitimately take longer (e.g. vision analysis).
+func callGeminiWithTimeout(model string, reqBody geminiGenerateRequest, timeout time.Duration) (*geminiGenerateResponse, error) {
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
@@ -86,7 +98,7 @@ func callGemini(model string, reqBody geminiGenerateRequest) (*geminiGenerateRes
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	ctx, cancel := context.WithTimeout(context.Background(), geminiChatTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	resp, err := geminiHTTPClient.Do(httpReq.WithContext(ctx))

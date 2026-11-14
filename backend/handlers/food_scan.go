@@ -153,7 +153,7 @@ func analyzeFoodWithGemini(imageBytes []byte, mimeType string, ctx userFoodConte
 		GenerationConfig: geminiGenerationConfig{ResponseMimeType: "application/json"},
 	}
 
-	geminiResp, err := callGemini(GeminiModel(), reqBody)
+	geminiResp, err := callGeminiWithTimeout(GeminiModel(), reqBody, geminiFoodScanTimeout)
 	if err != nil {
 		if err == ErrQuotaExceeded {
 			return models.ScannedFood{}, false, ErrQuotaExceeded
@@ -287,6 +287,9 @@ func ScanFood(w http.ResponseWriter, r *http.Request) {
 		// No AI provider available — use the rich simulated analysis with
 		// 15 diverse food combinations and per-food health benefits.
 		analysis = simulateFoodAnalysis(userID)
+		// Flag it so the app can say these numbers are an estimate rather
+		// than an analysis of the photo the user actually took.
+		analysis.IsSimulated = true
 	}
 
 	// ── Check for user allergies ──────────────────────────────────

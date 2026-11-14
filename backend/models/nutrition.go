@@ -123,6 +123,9 @@ type ScannedFood struct {
 	HealthFacts      string       `json:"healthFacts"`
 	FoodDetails      []FoodDetail `json:"foodDetails,omitempty"`
 	AllergenFlags    []string     `json:"allergenFlags,omitempty"`
+	// IsSimulated marks a result that came from the offline fallback instead
+	// of real Gemini vision analysis, so the app can tell the user.
+	IsSimulated      bool         `json:"isSimulated,omitempty"`
 	WasLogged        bool         `json:"wasLogged"`
 	LoggedMealType   string       `json:"loggedMealType,omitempty"`
 	CreatedAt        string       `json:"createdAt"`
