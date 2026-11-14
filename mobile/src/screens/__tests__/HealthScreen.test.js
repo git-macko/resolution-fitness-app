@@ -49,6 +49,7 @@ jest.mock('../../api/client', () => ({
   default: {
     getDailyNutrition: jest.fn(() => Promise.resolve({})),
     getMealSuggestions: jest.fn(() => Promise.resolve({})),
+    getScanHistory: jest.fn(() => Promise.resolve({ data: [] })),
     createMeal: jest.fn(() => Promise.resolve({})),
     logWater: jest.fn(() => Promise.resolve({})),
     deleteMeal: jest.fn(() => Promise.resolve({})),
@@ -222,10 +223,11 @@ function getMockApi() {
  * Render HealthScreen with mocked nutrition + suggestions.
  */
 async function renderHealthScreen(options = {}) {
-  const { daily = createDaily(), suggestions = [] } = options;
+  const { daily = createDaily(), suggestions = [], scans = [] } = options;
   const api = getMockApi();
   api.getDailyNutrition.mockResolvedValue({ data: daily });
   api.getMealSuggestions.mockResolvedValue({ data: suggestions });
+  api.getScanHistory.mockResolvedValue({ data: scans });
 
   const mockNavigation = { navigate: jest.fn(), goBack: jest.fn() };
 
@@ -238,7 +240,7 @@ async function renderHealthScreen(options = {}) {
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  return { tree, root: tree.root, api };
+  return { tree, root: tree.root, api, navigation: mockNavigation };
 }
 
 /**
@@ -477,6 +479,35 @@ describe('HealthScreen — Quick Log & nutrition tracking', () => {
       primaryGoal: 'build_muscle',
     });
     expect(Alert.alert).toHaveBeenCalledWith('Goals updated 🎯', expect.stringContaining('2200'));
+  });
+
+  it('lists recent scans under the scan button and opens one', async () => {
+    const { root, navigation } = await renderHealthScreen({
+      scans: [
+        {
+          id: 's1',
+          name: 'Sinigang na Baboy',
+          calories: 620,
+          proteinG: 29,
+          healthScore: 6,
+          photoUrl: '/uploads/food.jpg',
+          createdAt: '2026-08-15T10:00:00Z',
+        },
+      ],
+    });
+
+    const text = extractText(root);
+    expect(text).toContain('📜 Scan History');
+    expect(text).toContain('Sinigang na Baboy');
+    expect(text).toContain('620 cal');
+
+    const row = findTouchableByText(root, 'Sinigang na Baboy');
+    expect(row).not.toBeNull();
+    await act(async () => { row.props.onPress(); });
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'FoodScan',
+      expect.objectContaining({ pastScan: expect.objectContaining({ id: 's1' }) })
+    );
   });
 
   it('deletes a logged meal after confirmation', async () => {

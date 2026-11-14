@@ -6,12 +6,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, Animated,
-  StyleSheet, RefreshControl, ActivityIndicator, TextInput,
+  StyleSheet, RefreshControl, ActivityIndicator, TextInput, Image,
 } from 'react-native';
 import { showAlert } from '../utils/alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import { BASE_URL } from '../api/config';
 import HeroCard from '../components/HeroCard';
 import HeroStatRow from '../components/HeroStat';
 import Card from '../components/Card';
@@ -57,6 +58,7 @@ export default function HealthScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(null);
+  const [scanHistory, setScanHistory] = useState([]);
 
   // ── Quick food log state ──────────────────────────────────────
   const [quickMeal, setQuickMeal] = useState({ name: '', calories: '', protein: '', carbs: '', fat: '', water: '' });
@@ -121,13 +123,18 @@ export default function HealthScreen({ navigation }) {
 
   const fetchData = useCallback(async () => {
     try {
-      const [nutrition, mealSuggestions] = await Promise.all([
+      const [nutrition, mealSuggestions, scans] = await Promise.all([
         api.getDailyNutrition(),
         api.getMealSuggestions(),
+        // Recent scans are a bonus on this tab: if that call fails, the
+        // nutrition data above must still render.
+        api.getScanHistory().catch(() => null),
       ]);
       setDailyNutrition(nutrition.data || nutrition || {});
       setSuggestions(mealSuggestions.data || mealSuggestions.suggestions || []);
       if (Array.isArray(mealSuggestions)) setSuggestions(mealSuggestions);
+      const scanList = scans?.data || scans || [];
+      setScanHistory(Array.isArray(scanList) ? scanList : []);
       setFetchError(null);
     } catch (err) {
       console.warn('Health fetch failed:', err.message);
@@ -327,6 +334,63 @@ export default function HealthScreen({ navigation }) {
           </View>
           <Text style={[styles.scanArrow, { color: colors.accent }]}>→</Text>
         </TouchableOpacity>
+
+        {/* ── Scan History ─────────────────────────────────────── */}
+        {scanHistory.length > 0 && (
+          <Card style={styles.marginBottom} contentStyle={styles.scanHistoryCard}>
+            <View style={styles.scanHistoryHeader}>
+              <Text style={[styles.scanHistoryTitle, { color: colors.textHeading }]}>
+                📜 Scan History
+              </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('ScanHistory')}>
+                <Text style={[styles.scanHistoryAll, { color: colors.accent }]}>View all</Text>
+              </TouchableOpacity>
+            </View>
+            {scanHistory.slice(0, 3).map((scan, idx) => {
+              const dish = scan.name || scan.detectedFoods?.[0] || 'Scanned food';
+              const thumb = scan.photoUrl ? `${BASE_URL}${scan.photoUrl}` : null;
+              return (
+                <TouchableOpacity
+                  key={scan.id || idx}
+                  style={styles.scanHistoryRow}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('FoodScan', { pastScan: scan })}
+                >
+                  {thumb ? (
+                    <Image source={{ uri: thumb }} style={styles.scanHistoryThumb} />
+                  ) : (
+                    <View
+                      style={[
+                        styles.scanHistoryThumb,
+                        styles.scanHistoryThumbEmpty,
+                        { backgroundColor: colors.divider },
+                      ]}
+                    >
+                      <Text style={styles.scanHistoryThumbIcon}>🍽️</Text>
+                    </View>
+                  )}
+                  <View style={styles.scanHistoryText}>
+                    <Text
+                      style={[styles.scanHistoryName, { color: colors.textPrimary }]}
+                      numberOfLines={1}
+                    >
+                      {dish}
+                    </Text>
+                    <Text style={[styles.scanHistoryMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                      {scan.calories || 0} cal • {scan.proteinG || 0}g protein •{' '}
+                      {new Date(scan.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={[styles.scanHistoryScore, { backgroundColor: colors.accentBg }]}>
+                    <Text style={[styles.scanHistoryScoreText, { color: colors.accent }]}>
+                      {scan.healthScore || 0}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </Card>
+        )}
 
         {/* ── Quick Food Log ──────────────────────────────────── */}
         <Card style={styles.marginBottom} contentStyle={styles.quickCard}>
@@ -785,6 +849,31 @@ function makeStyles(theme) {
     scanTitle: { ...Typography.h4, fontWeight: '700' },
     scanSub: { ...Typography.caption, marginTop: 2 },
     scanArrow: { fontSize: 24 },
+    // ── Scan History ───────────────────────────────────────────
+    scanHistoryCard: { padding: Spacing.lg },
+    scanHistoryHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: Spacing.md,
+    },
+    scanHistoryTitle: { ...Typography.bodyMedium },
+    scanHistoryAll: { ...Typography.captionMedium, fontWeight: '600' },
+    scanHistoryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
+    scanHistoryThumb: { width: 48, height: 48, borderRadius: BorderRadius.md },
+    scanHistoryThumbEmpty: { alignItems: 'center', justifyContent: 'center' },
+    scanHistoryThumbIcon: { fontSize: 20 },
+    scanHistoryText: { flex: 1, marginHorizontal: Spacing.md },
+    scanHistoryName: { ...Typography.bodySmall, fontWeight: '600' },
+    scanHistoryMeta: { ...Typography.caption, marginTop: 2 },
+    scanHistoryScore: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scanHistoryScoreText: { ...Typography.captionMedium, fontWeight: '700' },
     // ── Quick Log ─────────────────────────────────────────────
     quickCard: {
       padding: Spacing.lg,

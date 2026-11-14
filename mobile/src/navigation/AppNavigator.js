@@ -135,7 +135,9 @@ function HealthStack() {
       <Stack.Screen
         name="FoodScan"
         component={FoodScanScreen}
-        options={{ title: 'Scan Food' }}
+        // The screen draws its own header below Layout.screenTopPadding, so
+        // the phone-frame camera cutout / device notch can't cover it.
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="ScanHistory"

@@ -15,7 +15,7 @@ import api from '../api/client';
 import { BASE_URL } from '../api/config';
 import { useTheme, useThemedStyles } from '../contexts/ThemeContext';
 import Typography from '../theme/typography';
-import { Spacing, BorderRadius, Shadows } from '../theme/spacing';
+import { Spacing, BorderRadius, Layout } from '../theme/spacing';
 import AIUsageNotice from '../components/AIUsageNotice';
 
 export default function FoodScanScreen({ route, navigation }) {
@@ -130,7 +130,27 @@ export default function FoodScanScreen({ route, navigation }) {
   const foodDetails = scanResult?.foodDetails || [];
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {/* Own header, padded below the status bar / notch / phone-frame camera
+          cutout, so the cutout never sits on top of the screen title. */}
+      <View
+        style={[
+          styles.screenHeader,
+          { backgroundColor: colors.headerBg, borderBottomColor: colors.border },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Back"
+          style={styles.backBtn}
+        >
+          <Text style={[styles.backText, { color: colors.headerText }]}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={[styles.screenHeaderTitle, { color: colors.headerText }]}>Scan Food</Text>
+        <View style={styles.backBtn} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.container}>
       <AIUsageNotice style={{ marginBottom: Spacing.md }} />
 
       {/* ── Image Area ──────────────────────────────────────── */}
@@ -198,6 +218,19 @@ export default function FoodScanScreen({ route, navigation }) {
       {/* ── Results ─────────────────────────────────────────────── */}
       {scanResult && (
         <View style={styles.resultsSection}>
+          {scanResult.isSimulated ? (
+            <View style={[styles.fallbackCard, { backgroundColor: colors.accentWash, borderLeftColor: colors.warning }]}>
+              <Text style={[styles.fallbackTitle, { color: colors.warning }]}>
+                ⚠️ AI analysis unavailable
+              </Text>
+              <Text style={[styles.fallbackText, { color: colors.textPrimary }]}>
+                Gemini couldn't analyze this photo, so Mimi fell back to a general
+                estimate. Treat these numbers as a rough guide and try scanning again
+                for an analysis of your actual meal.
+              </Text>
+            </View>
+          ) : null}
+
           {scanResult.name ? (
             <View style={[styles.nameCard, { backgroundColor: colors.surface }]}>
               <Text style={[styles.nameLabel, { color: colors.textSecondary }]}>Identified Dish</Text>
@@ -354,7 +387,8 @@ export default function FoodScanScreen({ route, navigation }) {
           </View>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -366,6 +400,28 @@ function makeStyles(theme) {
       paddingBottom: Spacing['5xl'],
       backgroundColor: colors.background,
     },
+    screen: { flex: 1 },
+    screenHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Spacing.xl,
+      // Clears the status bar, device notch and the phone-frame camera cutout.
+      paddingTop: Layout.screenTopPadding,
+      paddingBottom: Spacing.lg,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    screenHeaderTitle: { ...Typography.h4, fontWeight: '700' },
+    backBtn: { minWidth: 64 },
+    backText: { ...Typography.bodySmall, fontWeight: '600' },
+    fallbackCard: {
+      borderRadius: BorderRadius.md,
+      padding: Spacing.lg,
+      marginBottom: Spacing.lg,
+      borderLeftWidth: 3,
+    },
+    fallbackTitle: { ...Typography.captionMedium, marginBottom: Spacing.sm },
+    fallbackText: { ...Typography.bodySmall, lineHeight: 20 },
     uploadArea: {
       borderRadius: BorderRadius.lg,
       padding: Spacing['3xl'],
