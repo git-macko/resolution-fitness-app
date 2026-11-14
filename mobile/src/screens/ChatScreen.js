@@ -161,6 +161,10 @@ function ChatMessage({
           activeOpacity={0.85}
           onLongPress={handleLongPress}
           delayLongPress={350}
+          // Constrain the wrapper, not the bubble: the wrapper is a direct
+          // child of the row (which has a known width), so the percentage
+          // resolves and long replies wrap instead of running off screen.
+          style={styles.bubbleWrap}
           accessibilityRole="text"
           accessibilityLabel={`${isUser ? 'You' : 'Mimi'}: ${msg.content}`}
         >
@@ -291,6 +295,7 @@ export default function ChatScreen() {
 
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [inputFocused, setInputFocused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
@@ -722,14 +727,24 @@ export default function ChatScreen() {
             { backgroundColor: colors.background, borderTopColor: colors.border },
           ]}
         >
-          <View style={styles.inputInner}>
+          <View
+            style={[
+              styles.inputInner,
+              {
+                // Focus is shown by lightening the box, not by an outline.
+                backgroundColor: inputFocused
+                  ? colors.tabsAndHeader
+                  : colors.surfaceMuted,
+                borderColor: colors.border,
+              },
+            ]}
+          >
             <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: colors.surfaceMuted, color: colors.textPrimary },
-              ]}
+              style={[styles.input, { color: colors.textPrimary }]}
               value={inputText}
               onChangeText={setInputText}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               placeholder="Message Mimi..."
               placeholderTextColor={colors.textMuted}
               multiline
@@ -740,10 +755,14 @@ export default function ChatScreen() {
             <TouchableOpacity
               style={[
                 styles.sendBtn,
-                !inputText.trim() && { backgroundColor: colors.divider },
+                // Visible but softened until there's something to send.
+                { opacity: inputText.trim().length > 0 ? 1 : 0.35 },
               ]}
               onPress={handleSend}
               disabled={!inputText.trim() || sending}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+              accessibilityState={{ disabled: !inputText.trim() || sending }}
             >
               <Text style={[styles.sendBtnText, { color: colors.textInverse }]}>➤</Text>
             </TouchableOpacity>
@@ -862,8 +881,14 @@ function makeStyles(theme) {
       width: 28,
       marginRight: Spacing.sm,
     },
-    messageBubble: {
+    bubbleWrap: {
       maxWidth: '78%',
+      flexShrink: 1,
+      // React Native Web defaults flex items to min-width: auto, which
+      // refuses to shrink below the content's longest line.
+      minWidth: 0,
+    },
+    messageBubble: {
       paddingHorizontal: Spacing.md,
       paddingVertical: Spacing.sm,
       borderRadius: BorderRadius.lg,
@@ -872,6 +897,7 @@ function makeStyles(theme) {
       ...Typography.body,
       fontSize: 16,
       lineHeight: 22,
+      flexShrink: 1,
     },
     timestamp: {
       ...Typography.caption,
@@ -1008,28 +1034,38 @@ function makeStyles(theme) {
       paddingVertical: Spacing.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
     },
+    // The pill is the input box; the send button sits beside the text
+    // inside the same pill, so the two can never overlap.
     inputInner: {
       flexDirection: 'row',
       alignItems: 'flex-end',
-      gap: Spacing.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: BorderRadius.md,
+      paddingLeft: Spacing.lg,
+      paddingRight: Spacing.xs,
+      paddingVertical: Spacing.xs,
     },
     input: {
       flex: 1,
       ...Typography.body,
       fontSize: 16,
-      maxHeight: 100,
-      paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.sm,
-      borderRadius: BorderRadius.full,
       lineHeight: 20,
+      minHeight: 36,
+      maxHeight: 20,
+      paddingVertical: Spacing.sm,
+      textAlignVertical: 'center',
+      // Browsers draw a focus ring (and iOS a tint edge) inside the pill;
+      // the box lightening on focus is the only focus cue we want.
+      outlineStyle: 'none',
     },
     sendBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       backgroundColor: colors.accent,
       justifyContent: 'center',
       alignItems: 'center',
+      marginLeft: Spacing.sm,
     },
     sendBtnText: {
       fontSize: 18,
